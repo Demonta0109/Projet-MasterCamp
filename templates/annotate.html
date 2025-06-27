@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head><title>Annoter</title></head>
+<body>
+  <h1>Annoter l'image</h1>
+  <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
+  <form method="post">
+    <button type="submit" name="annotation" value="pleine">Pleine</button>
+    <button type="submit" name="annotation" value="vide">Vide</button>
+  </form>
+</body>
+</html>
