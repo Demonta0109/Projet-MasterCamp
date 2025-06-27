@@ -8,12 +8,12 @@ from werkzeug.utils import secure_filename
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="../FrontEnd", static_folder="../static")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Init base SQLite
 def init_db():
-    conn = sqlite3.connect('db.sqlite')
+    conn = sqlite3.connect('../db.sqlite')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS images (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +38,7 @@ def upload_image():
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
 
-            conn = sqlite3.connect('db.sqlite')
+            conn = sqlite3.connect('../db.sqlite')
             c = conn.cursor()
             c.execute("INSERT INTO images (filename, upload_date) VALUES (?, ?)",
                       (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
@@ -52,7 +52,7 @@ def upload_image():
 def annotate(filename):
     if request.method == 'POST':
         annotation = request.form['annotation']
-        conn = sqlite3.connect('db.sqlite')
+        conn = sqlite3.connect('../db.sqlite')
         c = conn.cursor()
         c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
         conn.commit()
