@@ -23,7 +23,6 @@ def init_db():
     )''')
     conn.commit()
     conn.close()
-    #qsdqdqdqsdqd
 
 init_db()
 
@@ -39,7 +38,7 @@ def upload_image():
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
 
-            conn = sqlite3.connect('../Sql/db.sqlite')
+            conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
             c.execute("INSERT INTO images (filename, upload_date) VALUES (?, ?)",
                       (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
