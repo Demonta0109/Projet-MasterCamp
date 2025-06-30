@@ -16,7 +16,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 # Init base SQLite
 def init_db():
-    conn = sqlite3.connect('../db.sqlite')
+    conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
     c.execute('DROP TABLE IF EXISTS images')
     c.execute('''
@@ -54,7 +54,7 @@ def upload_image():
 
             width, height, filesize, avg_color, contrast, edge_count, histogram = extract_features(path)
 
-            conn = sqlite3.connect('../db.sqlite')
+            conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
             c.execute("""INSERT INTO images 
                 (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram) 
@@ -72,14 +72,14 @@ def upload_image():
 def annotate(filename):
     if request.method == 'POST':
         annotation = request.form['annotation']
-        conn = sqlite3.connect('../db.sqlite')
+        conn = sqlite3.connect('db.sqlite')
         c = conn.cursor()
         c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
         conn.commit()
         conn.close()
         return redirect(url_for('upload_image'))
 
-    conn = sqlite3.connect('../db.sqlite')
+    conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
     c.execute("SELECT * FROM images WHERE filename = ?", (filename,))
     image_data = c.fetchone()
