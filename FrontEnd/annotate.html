@@ -128,17 +128,38 @@
           },
           options: {
             responsive: true,
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#e0e0e0' // Couleur claire pour les légendes
+                }
+              }
+            },
             scales: {
               x: {
                 title: {
                   display: true,
-                  text: 'Intensité (0-255)'
+                  text: 'Intensité (0-255)',
+                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe X
+                },
+                ticks: {
+                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe X
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
                 }
               },
               y: {
                 title: {
                   display: true,
-                  text: 'Nombre de pixels'
+                  text: 'Nombre de pixels',
+                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe Y
+                },
+                ticks: {
+                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe Y
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
                 }
               }
             }
@@ -161,17 +182,38 @@
           },
           options: {
             responsive: true,
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#e0e0e0' // Couleur claire pour les légendes
+                }
+              }
+            },
             scales: {
               x: {
                 title: {
                   display: true,
-                  text: 'Niveau de gris (0-255)'
+                  text: 'Niveau de gris (0-255)',
+                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe X
+                },
+                ticks: {
+                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe X
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
                 }
               },
               y: {
                 title: {
                   display: true,
-                  text: 'Nombre de pixels'
+                  text: 'Nombre de pixels',
+                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe Y
+                },
+                ticks: {
+                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe Y
+                },
+                grid: {
+                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
                 }
               }
             }
