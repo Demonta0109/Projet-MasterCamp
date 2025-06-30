@@ -9,7 +9,7 @@ import numpy as np
 import cv2
 
 UPLOAD_FOLDER = 'static/uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
 app = Flask(__name__, template_folder="../FrontEnd", static_folder="../static")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -18,7 +18,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def init_db():
     conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
-    c.execute('DROP TABLE IF EXISTS images')
+    c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
     c.execute('''
         CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,7 +31,8 @@ def init_db():
             avg_color TEXT,
             contrast REAL,
             edges INTEGER,
-            histogram TEXT
+            histogram TEXT,
+            histogram_luminance TEXT
         )
     ''')
     conn.commit()
@@ -52,15 +53,15 @@ def upload_image():
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
 
-            width, height, filesize, avg_color, contrast, edge_count, histogram = extract_features(path)
+            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance = extract_features(path)
 
             conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
             c.execute("""INSERT INTO images 
-                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                 width, height, filesize, avg_color, contrast, edge_count, histogram))
+                 width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance))
             conn.commit()
             conn.close()
 
@@ -88,7 +89,8 @@ def annotate(filename):
     return render_template('annotate.html', filename=filename, image=image_data)
 
 def extract_features(image_path):
-    filesize = os.path.getsize(image_path)
+    filesize_bytes = os.path.getsize(image_path)
+    filesize_kb = round(filesize_bytes / 1024, 2)  # Convertir en Ko avec 2 décimales
     img = Image.open(image_path).convert('RGB')
     width, height = img.size
     img_array = np.array(img)
@@ -100,12 +102,17 @@ def extract_features(image_path):
     edges = cv2.Canny(gray, 100, 200)
     edge_count = int(np.sum(edges > 0))
 
+    # Histogrammes des couleurs RGB
     hist_r = cv2.calcHist([img_array], [0], None, [256], [0, 256]).flatten()
     hist_g = cv2.calcHist([img_array], [1], None, [256], [0, 256]).flatten()
     hist_b = cv2.calcHist([img_array], [2], None, [256], [0, 256]).flatten()
-    hist_str = ','.join([f'{int(v)}' for v in np.concatenate([hist_r, hist_g, hist_b])])
+    hist_rgb_str = ','.join([f'{int(v)}' for v in np.concatenate([hist_r, hist_g, hist_b])])
+    
+    # Histogramme de luminance
+    hist_luminance = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
+    hist_luminance_str = ','.join([f'{int(v)}' for v in hist_luminance])
 
-    return width, height, filesize, str(avg_rgb), contrast, edge_count, hist_str
+    return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str
 
 
 

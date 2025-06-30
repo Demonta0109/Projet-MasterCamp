@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Annoter</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -37,6 +38,147 @@
       <li>Contraste : {{ image[8] }}</li>
       <li>Contours détectés : {{ image[9] }}</li>
     </ul>
+
+    <!-- Bouton voir plus -->
+    <button id="toggleHistograms" onclick="toggleHistogramSection()" style="margin-top: 20px; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+      Voir plus (Histogrammes)
+    </button>
+
+    <!-- Section des histogrammes (cachée par défaut) -->
+    <div id="histogramSection" style="display: none; margin-top: 20px;">
+      <h3>Histogrammes</h3>
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 300px;">
+          <h4>Histogramme des couleurs (RGB)</h4>
+          <canvas id="colorHistogram" width="400" height="200"></canvas>
+        </div>
+        <div style="flex: 1; min-width: 300px;">
+          <h4>Histogramme de luminance</h4>
+          <canvas id="luminanceHistogram" width="400" height="200"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let histogramVisible = false;
+      let chartsCreated = false;
+
+      function toggleHistogramSection() {
+        const section = document.getElementById('histogramSection');
+        const button = document.getElementById('toggleHistograms');
+        
+        if (histogramVisible) {
+          section.style.display = 'none';
+          button.textContent = 'Voir plus (Histogrammes)';
+          histogramVisible = false;
+        } else {
+          section.style.display = 'block';
+          button.textContent = 'Voir moins';
+          histogramVisible = true;
+          
+          // Créer les graphiques seulement la première fois
+          if (!chartsCreated) {
+            createHistograms();
+            chartsCreated = true;
+          }
+        }
+      }
+
+      function createHistograms() {
+        // Données des histogrammes depuis le serveur
+        const histogramRGB = `{{ image[10] }}`.split(',').map(Number);
+        const histogramLuminance = `{{ image[11] }}`.split(',').map(Number);
+        
+        // Séparer les histogrammes RGB (256 valeurs pour chaque couleur)
+        const histR = histogramRGB.slice(0, 256);
+        const histG = histogramRGB.slice(256, 512);
+        const histB = histogramRGB.slice(512, 768);
+        
+        // Labels pour l'axe X (0-255)
+        const labels = Array.from({length: 256}, (_, i) => i);
+
+        // Histogramme des couleurs RGB
+        const ctxColor = document.getElementById('colorHistogram').getContext('2d');
+        new Chart(ctxColor, {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Rouge',
+              data: histR,
+              borderColor: 'rgb(255, 99, 132)',
+              backgroundColor: 'rgba(255, 99, 132, 0.1)',
+              fill: false,
+              tension: 0.1
+            }, {
+              label: 'Vert',
+              data: histG,
+              borderColor: 'rgb(75, 192, 192)',
+              backgroundColor: 'rgba(75, 192, 192, 0.1)',
+              fill: false,
+              tension: 0.1
+            }, {
+              label: 'Bleu',
+              data: histB,
+              borderColor: 'rgb(54, 162, 235)',
+              backgroundColor: 'rgba(54, 162, 235, 0.1)',
+              fill: false,
+              tension: 0.1
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: 'Intensité (0-255)'
+                }
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: 'Nombre de pixels'
+                }
+              }
+            }
+          }
+        });
+
+        // Histogramme de luminance
+        const ctxLuminance = document.getElementById('luminanceHistogram').getContext('2d');
+        new Chart(ctxLuminance, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Luminance',
+              data: histogramLuminance,
+              backgroundColor: 'rgba(128, 128, 128, 0.7)',
+              borderColor: 'rgba(128, 128, 128, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: 'Niveau de gris (0-255)'
+                }
+              },
+              y: {
+                title: {
+                  display: true,
+                  text: 'Nombre de pixels'
+                }
+              }
+            }
+          }
+        });
+      }
+    </script>
   </main>
 
 </body>
