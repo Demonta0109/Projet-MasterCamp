@@ -22,7 +22,18 @@
     <ul>
       <li>Taille fichier : {{ image[6] }} octets</li>
       <li>Dimensions : {{ image[4] }} x {{ image[5] }} px</li>
-      <li>Couleur moyenne : {{ image[7] }}</li>
+      <li>Couleur moyenne : {{ image[7] }}
+      <span id="avg-color-box" style="display:inline-block;width:20px;height:20px;border:1px solid #000;vertical-align:middle;"></span>
+    </li>
+    <script>
+      // Récupère la couleur moyenne depuis le texte (ex: "(123, 45, 67)")
+      const avgColorText = `{{ image[7] }}`;
+      const match = avgColorText.match(/\((\d+),\s*(\d+),\s*(\d+)\)/);
+      if (match) {
+        const r = match[1], g = match[2], b = match[3];
+        document.getElementById('avg-color-box').style.backgroundColor = `rgb(${r},${g},${b})`;
+      }
+    </script>
       <li>Contraste : {{ image[8] }}</li>
       <li>Contours détectés : {{ image[9] }}</li>
     </ul>
