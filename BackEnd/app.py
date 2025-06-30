@@ -92,7 +92,7 @@ def extract_features(image_path):
     img = Image.open(image_path).convert('RGB')
     width, height = img.size
     img_array = np.array(img)
-    avg_rgb = tuple(np.mean(img_array.reshape(-1, 3), axis=0).astype(int))
+    avg_rgb = tuple(int(x) for x in np.mean(img_array.reshape(-1, 3), axis=0))
 
     gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     contrast = float(np.max(gray) - np.min(gray))
