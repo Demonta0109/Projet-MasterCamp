@@ -1,20 +1,32 @@
 <!DOCTYPE html>
-<html>
-<head><title>Annoter</title></head>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Annoter</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
 <body>
-  <h1>Annoter l'image</h1>
-  <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
-  <form method="post">
-    <button type="submit" name="annotation" value="pleine">Pleine</button>
-    <button type="submit" name="annotation" value="vide">Vide</button>
-  </form>
-  <h2>Métadonnées</h2>
-  <ul>
-    <li>Taille fichier : {{ image[6] }} octets</li>
-    <li>Dimensions : {{ image[4] }} x {{ image[5] }} px</li>
-    <li>Couleur moyenne : {{ image[7] }}</li>
-    <li>Contraste : {{ image[8] }}</li>
-    <li>Contours détectés : {{ image[9] }}</li>
-  </ul>
+
+  <header>
+    <h1>Annoter l'image</h1>
+  </header>
+
+  <main>
+    <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
+    <form method="post">
+      <button type="submit" name="annotation" value="pleine">Pleine</button>
+      <button type="submit" name="annotation" value="vide">Vide</button>
+    </form>
+
+    <h2>Métadonnées</h2>
+    <ul>
+      <li>Taille fichier : {{ image[6] }} octets</li>
+      <li>Dimensions : {{ image[4] }} x {{ image[5] }} px</li>
+      <li>Couleur moyenne : {{ image[7] }}</li>
+      <li>Contraste : {{ image[8] }}</li>
+      <li>Contours détectés : {{ image[9] }}</li>
+    </ul>
+  </main>
+
 </body>
 </html>

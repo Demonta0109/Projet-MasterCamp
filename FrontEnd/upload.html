@@ -1,11 +1,21 @@
 <!DOCTYPE html>
-<html>
-<head><title>Upload Image</title></head>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload Image</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
 <body>
-  <h1>Upload une image</h1>
-  <form method="post" enctype="multipart/form-data">
-    <input type="file" name="image" required>
-    <input type="submit" value="Uploader">
-  </form>
+
+  <header>
+    <h1>Upload une image</h1>
+  </header>
+  <main>
+    <form method="post" enctype="multipart/form-data">
+      <input type="file" name="image" required>
+      <button type="submit">Uploader</button>
+    </form>
+  </main>
+
 </body>
 </html>
