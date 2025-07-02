@@ -186,50 +186,72 @@ def detect_bin_region_and_edges(img_array, gray):
     Détecte la région de la benne dans l'image et calcule les contours dans cette région uniquement
     
     Stratégies de détection :
-    1. Détection de formes rectangulaires/cylindriques (bennes typiques)
-    2. Segmentation par couleur (bennes souvent sombres/métalliques)
-    3. Détection de contours forts (bords de la benne)
-    4. Zone centrale de l'image (bennes souvent centrées)
+    1. Détection de formes rectangulaires/cylindriques (bennes typiques) dans la partie basse
+    2. Segmentation par couleur (bennes souvent sombres/métalliques) dans la partie basse
+    3. Détection de contours forts (bords de la benne) dans la partie basse
+    4. Zone centrale-basse de l'image (bennes souvent centrées et au sol)
     """
     
     height, width = gray.shape
     
-    # Stratégie 1: Détection de contours pour trouver les formes principales
-    edges_strong = cv2.Canny(gray, 50, 150)
+    # Définir la région d'intérêt : partie basse de l'image (éviter les arbres/ciel)
+    # On se concentre sur les 60% inférieurs de l'image où se trouvent généralement les bennes
+    roi_top = int(height * 0.55)  # Commencer à 25% de la hauteur
+    roi_bottom = height
+    roi_left = 0
+    roi_right = width
+    
+    # Extraire la région d'intérêt pour l'analyse
+    gray_roi = gray[roi_top:roi_bottom, roi_left:roi_right]
+    
+    # Stratégie 1: Détection de contours dans la région d'intérêt uniquement
+    edges_strong = cv2.Canny(gray_roi, 50, 150)
     contours, _ = cv2.findContours(edges_strong, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
-    # Trouver le plus grand contour (probablement la benne)
+    # Ajuster les coordonnées des contours pour correspondre à l'image complète
     if contours:
-        largest_contour = max(contours, key=cv2.contourArea)
-        area = cv2.contourArea(largest_contour)
+        # Ajuster les coordonnées des contours
+        adjusted_contours = []
+        for contour in contours:
+            adjusted_contour = contour.copy()
+            adjusted_contour[:, :, 1] += roi_top  # Ajouter l'offset vertical
+            adjusted_contours.append(adjusted_contour)
         
-        # Si le contour est assez grand (au moins 10% de l'image), l'utiliser
-        if area > (width * height * 0.1):
-            # Créer un masque pour la région de la benne
-            mask = np.zeros(gray.shape, dtype=np.uint8)
-            cv2.fillPoly(mask, [largest_contour], 255)
+        if adjusted_contours:
+            largest_contour = max(adjusted_contours, key=cv2.contourArea)
+            area = cv2.contourArea(largest_contour)
             
-            # Calculer les contours fins uniquement dans cette région
-            edges_fine = cv2.Canny(gray, 100, 200)
-            bin_region_edges = cv2.bitwise_and(edges_fine, mask)
-            bin_edge_count = int(np.sum(bin_region_edges > 0))
-            bin_region_area = int(area)
-            
-            return bin_region_edges, bin_edge_count, bin_region_area
+            # Si le contour est assez grand (au moins 8% de la région d'intérêt), l'utiliser
+            roi_area = (roi_bottom - roi_top) * (roi_right - roi_left)
+            if area > (roi_area * 0.08):
+                # Créer un masque pour la région de la benne
+                mask = np.zeros(gray.shape, dtype=np.uint8)
+                cv2.fillPoly(mask, [largest_contour], 255)
+                
+                # Calculer les contours fins uniquement dans cette région
+                edges_fine = cv2.Canny(gray, 100, 200)
+                bin_region_edges = cv2.bitwise_and(edges_fine, mask)
+                bin_edge_count = int(np.sum(bin_region_edges > 0))
+                bin_region_area = int(area)
+                
+                return bin_region_edges, bin_edge_count, bin_region_area
     
-    # Stratégie 2: Si pas de contour détecté, utiliser la région centrale
-    # (souvent les bennes sont au centre de l'image)
-    center_margin = 0.15  # 15% de marge de chaque côté
-    x_start = int(width * center_margin)
-    x_end = int(width * (1 - center_margin))
-    y_start = int(height * center_margin)
-    y_end = int(height * (1 - center_margin))
+    # Stratégie 2: Si pas de contour détecté, utiliser la région centrale-basse
+    # (souvent les bennes sont au centre horizontalement et dans la partie basse verticalement)
+    center_margin_x = 0.12  # 10% de marge de chaque côté horizontalement
+    bottom_margin_y = 0.07  # 5% de marge depuis le bas
+    top_margin_y = 0.55     # Commencer à 25% de la hauteur (partie basse)
     
-    # Créer un masque pour la région centrale
+    x_start = int(width * center_margin_x)
+    x_end = int(width * (1 - center_margin_x))
+    y_start = int(height * top_margin_y)    # Partie basse seulement
+    y_end = int(height * (1 - bottom_margin_y))  # Laisser une marge en bas
+    
+    # Créer un masque pour la région centrale-basse
     mask = np.zeros(gray.shape, dtype=np.uint8)
     mask[y_start:y_end, x_start:x_end] = 255
     
-    # Calculer les contours dans la région centrale
+    # Calculer les contours dans la région centrale-basse
     edges_fine = cv2.Canny(gray, 100, 200)
     bin_region_edges = cv2.bitwise_and(edges_fine, mask)
     bin_edge_count = int(np.sum(bin_region_edges > 0))
@@ -249,10 +271,10 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     - Seuils adaptatifs selon la taille de l'image
     """
     
-    # Paramètres de classification ajustables
-    BRIGHTNESS_THRESHOLD = 135  # Seuil de luminosité moyenne (0-255)
-    EDGE_DENSITY_BASE_THRESHOLD = 0.11  # Seuil de base pour la densité des contours
-    BIN_EDGE_DENSITY_THRESHOLD = 0.15   # Seuil pour les contours dans la benne (plus élevé)
+    # Paramètres de classification ajustables - OPTIMISÉS
+    BRIGHTNESS_THRESHOLD = 135  # Seuil de luminosité moyenne (0-255) - OPTIMISÉ
+    EDGE_DENSITY_BASE_THRESHOLD = 0.9   # Seuil de base pour la densité des contours - OPTIMISÉ
+    BIN_EDGE_DENSITY_THRESHOLD = 0.12    # Seuil pour les contours dans la benne - OPTIMISÉ
     CONTRAST_THRESHOLD = 245  # Seuil de contraste (abaissé pour plus de sensibilité)
     
     # Calculer la luminosité moyenne (moyenne pondérée RGB)
@@ -291,8 +313,8 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     total_weight = 0
     weighted_score = 0
     
-    # Critère 1: Luminosité (poids: 2.0) - CORRIGÉ: poubelle pleine = plus claire
-    brightness_weight = 2.0
+    # Critère 1: Luminosité (poids: 2.0) - CORRIGÉ: poubelle pleine = plus claire - OPTIMISÉ
+    brightness_weight = 2.0  # OPTIMISÉ
     if avg_brightness > BRIGHTNESS_THRESHOLD:  # Correction: < au lieu de >
         criteria_scores['brightness'] = 1.0
         weighted_score += brightness_weight
@@ -300,8 +322,8 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
         criteria_scores['brightness'] = 0.0
     total_weight += brightness_weight
     
-    # Critère 2: Densité des contours dans la benne (prioritaire) ou globale (poids: 4.0)
-    edge_weight = 4.0
+    # Critère 2: Densité des contours dans la benne (prioritaire) ou globale (poids: 4.0) - OPTIMISÉ
+    edge_weight = 4.0  # OPTIMISÉ
     if bin_edge_count is not None and bin_area is not None:
         # Utiliser la densité de contours dans la benne (plus précis)
         if bin_edge_density > adjusted_bin_edge_threshold:
@@ -322,7 +344,7 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
 
     # Critère 3: Non-uniformité de la luminance (poids: 1.0)
     uniformity_weight = 1.0
-    uniformity_threshold = 0.6
+    uniformity_threshold = 0.5
     if luminance_uniformity > uniformity_threshold:  # Plus de variation = plus plein
         criteria_scores['uniformity'] = 1.0
         weighted_score += uniformity_weight
@@ -334,8 +356,8 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     final_score = weighted_score / total_weight
     confidence_score = abs(final_score - 0.5) * 2  # Distance de 0.5, normalisée
     
-    # Classification avec seuil ajustable
-    classification_threshold = 0.45  # Seuil légèrement biaisé vers "vide"
+    # Classification avec seuil ajustable - OPTIMISÉ
+    classification_threshold = 0.43  # Seuil optimisé
     
     if final_score > classification_threshold:
         classification = "pleine"
