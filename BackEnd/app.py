@@ -73,11 +73,15 @@ def upload_image():
 def annotate(filename):
     if request.method == 'POST':
         annotation = request.form['annotation']
-        conn = sqlite3.connect('db.sqlite')
-        c = conn.cursor()
-        c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
-        conn.commit()
-        conn.close()
+        if annotation in ['pleine', 'vide']:
+            conn = sqlite3.connect('db.sqlite')
+            c = conn.cursor()
+            c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
+            conn.commit()
+            conn.close()
+        else:
+            # Si l'annotation est "A determiner", on lance la labellisation automatique
+            label_image(filename)
         return redirect(url_for('upload_image'))
 
     conn = sqlite3.connect('db.sqlite')
@@ -135,6 +139,24 @@ def image_detail(image_id):
     else:
         return "Image non trouvée", 404
 
+
+def label_image(filename):
+    """Cette fonction permet de labeliser l'image automatiquement.
+    Si elle est "pleine" ou "vide".
+    update la table images avec le label."""
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    c.execute("SELECT * FROM images WHERE filename = ?", (filename,))
+    image_data = c.fetchone()
+    if image_data:
+        # Logique de labellisation ici
+        # Exemple simple : si la couleur moyenne est claire, on considère l'image comme "pleine", sinon "vide"
+        avg_color = eval(image_data[7])  # Convertir la chaîne de caractères en
+        label = 'pleine' if sum(avg_color) > 382 else 'vide'
+        # Mettre à jour l'annotation dans la base de données
+        c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (label, filename))
+        conn.commit()
+    conn.close()
 
 
 if __name__ == '__main__':
