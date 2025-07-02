@@ -10,6 +10,9 @@
 
   <header>
     <h1>Annoter l'image</h1>
+    <nav>
+      <a href="{{ url_for('dashboard') }}">Voir le tableau de bord</a>
+    </nav>
   </header>
 
   <main>
@@ -51,6 +54,7 @@
     <form method="post">
       <button type="submit" name="annotation" value="pleine">Pleine</button>
       <button type="submit" name="annotation" value="vide">Vide</button>
+      <button type="submit" name="annotation" value="Adeterminer">A determiner par l'IA</button>
     </form>
 
     <h2>Métadonnées</h2>

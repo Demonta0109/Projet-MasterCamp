@@ -7,6 +7,9 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
+from io import BytesIO
+import base64
 
 UPLOAD_FOLDER = 'static/uploads'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
@@ -77,11 +80,15 @@ def upload_image():
 def annotate(filename):
     if request.method == 'POST':
         annotation = request.form['annotation']
-        conn = sqlite3.connect('db.sqlite')
-        c = conn.cursor()
-        c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
-        conn.commit()
-        conn.close()
+        if annotation in ['pleine', 'vide']:
+            conn = sqlite3.connect('db.sqlite')
+            c = conn.cursor()
+            c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
+            conn.commit()
+            conn.close()
+        else:
+            # Si l'annotation est "A determiner", on lance la labellisation automatique
+            label_image(filename)
         return redirect(url_for('upload_image'))
 
     conn = sqlite3.connect('db.sqlite')
@@ -258,6 +265,100 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     
     return classification, debug_info
 
+@app.route('/images')
+def images():
+    conn = sqlite3.connect('db.sqlite')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, filename, annotation FROM images')
+    images = cursor.fetchall()
+    conn.close()
+    return render_template('gallery.html', images=images)
+
+@app.route('/image/<int:image_id>')
+def image_detail(image_id):
+    conn = sqlite3.connect('db.sqlite')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM images WHERE id = ?', (image_id,))
+    image = cursor.fetchone()
+    conn.close()
+    if image:
+        return render_template('detail.html', image=image)
+    else:
+        return "Image non trouvée", 404
+
+
+def label_image(filename):
+    """Cette fonction permet de labeliser l'image automatiquement.
+    Si elle est "pleine" ou "vide".
+    update la table images avec le label."""
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    c.execute("SELECT * FROM images WHERE filename = ?", (filename,))
+    image_data = c.fetchone()
+    if image_data:
+        # Logique de labellisation ici
+        # Exemple simple : si la couleur moyenne est claire, on considère l'image comme "pleine", sinon "vide"
+        avg_color = eval(image_data[7])  # Convertir la chaîne de caractères en
+        label = 'pleine' if sum(avg_color) > 382 else 'vide'
+        # Mettre à jour l'annotation dans la base de données
+        c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (label, filename))
+        conn.commit()
+    conn.close()
+
+@app.route('/dashboard')
+def dashboard():
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+
+    # Récupère les données de base
+    c.execute("SELECT COUNT(*) FROM images")
+    total_images = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM images WHERE annotation = 'pleine'")
+    full_count = c.fetchone()[0]
+
+    c.execute("SELECT COUNT(*) FROM images WHERE annotation = 'vide'")
+    empty_count = c.fetchone()[0]
+
+    c.execute("SELECT filesize FROM images")
+    sizes = [row[0] / 1024 for row in c.fetchall()]  # en Ko
+
+    c.execute("SELECT upload_date FROM images")
+    dates = [row[0][:10] for row in c.fetchall()]  # Juste la date (AAAA-MM-JJ)
+
+    conn.close()
+
+    # Pie chart annotation
+    labels = ['Pleine', 'Vide']
+    values = [full_count, empty_count]
+    fig, ax = plt.subplots()
+    ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
+    ax.axis('equal')
+    pie_buf = BytesIO()
+    plt.savefig(pie_buf, format='png')
+    pie_buf.seek(0)
+    pie_png = base64.b64encode(pie_buf.getvalue()).decode('utf-8')
+    plt.close(fig)
+
+    # Histogram taille des fichiers
+    fig, ax = plt.subplots()
+    ax.hist(sizes, bins=10, color='skyblue')
+    ax.set_title('Distribution des tailles de fichiers (Ko)')
+    ax.set_xlabel('Taille (Ko)')
+    ax.set_ylabel('Fréquence')
+    hist_buf = BytesIO()
+    plt.savefig(hist_buf, format='png')
+    hist_buf.seek(0)
+    hist_png = base64.b64encode(hist_buf.getvalue()).decode('utf-8')
+    plt.close(fig)
+
+    return render_template('dashboard.html',
+                           total=total_images,
+                           full=full_count,
+                           empty=empty_count,
+                           pie_chart=pie_png,
+                           hist_chart=hist_png,
+                           dates=dates)
 
 
 if __name__ == '__main__':
