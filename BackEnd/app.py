@@ -362,5 +362,23 @@ def dashboard():
                            dates=dates)
 
 
+@app.route('/delete/<int:image_id>', methods=['POST'])
+def delete_image(image_id):
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    # Récupérer le nom du fichier pour supprimer le fichier physique
+    c.execute("SELECT filename FROM images WHERE id = ?", (image_id,))
+    row = c.fetchone()
+    if row:
+        filename = row[0]
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(image_path):
+            os.remove(image_path)
+        c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+        conn.commit()
+    conn.close()
+    return redirect(url_for('images'))
+
+
 if __name__ == '__main__':
     app.run(debug=True)
