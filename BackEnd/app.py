@@ -21,7 +21,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def init_db():
     conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
-    c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
+    #c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
     c.execute('''
         CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -406,7 +406,8 @@ def dashboard():
     sizes = [row[0] / 1024 for row in c.fetchall()]  # en Ko
 
     c.execute("SELECT upload_date FROM images")
-    dates = [row[0][:10] for row in c.fetchall()]  # Juste la date (AAAA-MM-JJ)
+    # On ne garde que les dates valides (non nulles et non vides)
+    dates = [row[0][:10] for row in c.fetchall() if row[0] and len(row[0]) >= 10]  # Juste la date (AAAA-MM-JJ)
 
     conn.close()
 
@@ -435,12 +436,30 @@ def dashboard():
     plt.close(fig)
 
     return render_template('dashboard.html',
-                           total=total_images,
+                            total=total_images,
                            full=full_count,
                            empty=empty_count,
                            pie_chart=pie_png,
                            hist_chart=hist_png,
                            dates=dates)
+
+
+@app.route('/delete/<int:image_id>', methods=['POST'])
+def delete_image(image_id):
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    # Récupérer le nom du fichier pour supprimer le fichier physique
+    c.execute("SELECT filename FROM images WHERE id = ?", (image_id,))
+    row = c.fetchone()
+    if row:
+        filename = row[0]
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if os.path.exists(image_path):
+            os.remove(image_path)
+        c.execute("DELETE FROM images WHERE id = ?", (image_id,))
+        conn.commit()
+    conn.close()
+    return redirect(url_for('images'))
 
 
 if __name__ == '__main__':

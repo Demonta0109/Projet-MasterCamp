@@ -9,19 +9,22 @@
   <header>
     <h1>Galerie d'images</h1>
   </header>
-  <main>
-    <div style="display: flex; flex-wrap: wrap;">
-      {% for img in images %}
-      <div style="margin: 10px; text-align: center;">
-        <a href="{{ url_for('image_detail', image_id=img[0]) }}">
-          <img src="{{ url_for('static', filename='uploads/' + img[1]) }}" width="150">
-          <p>{{ img[2] }}</p>
-        </a>
-      </div>
-      {% endfor %}
+<main>
+  <div class="gallery-grid">
+    {% for img in images %}
+    <div class="gallery-item {% if img[2] == 'pleine' %}pleine{% elif img[2] == 'vide' %}vide{% endif %}">
+      <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post">
+        <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')">&times;</button>
+      </form>
+      <a href="{{ url_for('image_detail', image_id=img[0]) }}">
+        <img src="{{ url_for('static', filename='uploads/' + img[1]) }}" width="150">
+      </a>
     </div>
-    <br>
-    <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
-  </main>
+    {% endfor %}
+  </div>
+  <br>
+  <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
+</main>
 </body>
 </html>
+

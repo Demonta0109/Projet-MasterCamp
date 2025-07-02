@@ -22,6 +22,9 @@
       <li><strong>Contours :</strong> {{ image[9] }}</li>
     </ul>
     <a href="{{ url_for('images') }}">← Retour à la galerie</a>
+    <form action="{{ url_for('delete_image', image_id=image[0]) }}" method="post" style="display:inline;">
+      <button type="submit" onclick="return confirm('Supprimer cette image ?')">Supprimer</button>
+    </form>
   </main>
 </body>
 </html>
