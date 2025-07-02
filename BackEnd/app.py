@@ -55,13 +55,17 @@ def upload_image():
 
             width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance = extract_features(path)
 
+            # Classification automatique
+            avg_rgb = eval(avg_color)  # Convertir la string en tuple
+            auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance)
+
             conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
             c.execute("""INSERT INTO images 
-                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                 width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance))
+                 width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification))
             conn.commit()
             conn.close()
 
@@ -88,6 +92,41 @@ def annotate(filename):
 
     return render_template('annotate.html', filename=filename, image=image_data)
 
+@app.route('/stats')
+def get_stats():
+    """Route pour obtenir des statistiques sur les classifications"""
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    
+    # Statistiques générales
+    c.execute("SELECT COUNT(*) FROM images")
+    total_images = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM images WHERE annotation = 'pleine'")
+    pleines = c.fetchone()[0]
+    
+    c.execute("SELECT COUNT(*) FROM images WHERE annotation = 'vide'")
+    vides = c.fetchone()[0]
+    
+    # Moyennes des critères
+    c.execute("SELECT AVG(contrast), AVG(edges) FROM images")
+    avg_stats = c.fetchone()
+    avg_contrast = avg_stats[0] if avg_stats[0] else 0
+    avg_edges = avg_stats[1] if avg_stats[1] else 0
+    
+    conn.close()
+    
+    stats = {
+        'total': total_images,
+        'pleines': pleines,
+        'vides': vides,
+        'pourcentage_pleines': round((pleines / total_images * 100) if total_images > 0 else 0, 1),
+        'avg_contrast': round(avg_contrast, 2),
+        'avg_edges': round(avg_edges, 2)
+    }
+    
+    return render_template('stats.html', stats=stats)
+
 def extract_features(image_path):
     filesize_bytes = os.path.getsize(image_path)
     filesize_kb = round(filesize_bytes / 1024, 2)  # Convertir en Ko avec 2 décimales
@@ -113,6 +152,111 @@ def extract_features(image_path):
     hist_luminance_str = ','.join([f'{int(v)}' for v in hist_luminance])
 
     return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str
+
+def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_luminance_str=None):
+    """
+    Algorithme de classification automatique amélioré pour déterminer si une poubelle est vide ou pleine
+    
+    Améliorations:
+    - Correction de la logique de luminosité
+    - Ajout de l'analyse de la distribution de luminance
+    - Pondération des critères
+    - Seuils adaptatifs selon la taille de l'image
+    """
+    
+    # Paramètres de classification ajustables
+    BRIGHTNESS_THRESHOLD = 135  # Seuil de luminosité moyenne (0-255)
+    EDGE_DENSITY_BASE_THRESHOLD = 0.11  # Seuil de base pour la densité des contours
+    CONTRAST_THRESHOLD = 245  # Seuil de contraste (abaissé pour plus de sensibilité)
+    
+    # Calculer la luminosité moyenne (moyenne pondérée RGB)
+    r, g, b = avg_rgb
+    # Utilisation de la formule de luminance perceptuelle
+    avg_brightness = 0.299 * r + 0.587 * g + 0.114 * b
+    
+    # Calculer la densité des contours avec adaptation selon la taille
+    total_pixels = width * height
+    edge_density = edge_count / total_pixels if total_pixels > 0 else 0
+    
+    # Ajustement du seuil selon la résolution (images plus grandes = plus de détails naturels)
+    resolution_factor = min(1.0, (width * height) / (640 * 480))  # Normalisation à 640x480
+    adjusted_edge_threshold = EDGE_DENSITY_BASE_THRESHOLD * (1 + resolution_factor * 0.5)
+    
+    # Analyse de la distribution de luminance (si disponible)
+    luminance_uniformity = 0.5  # Valeur par défaut
+    if hist_luminance_str:
+        hist_values = [float(x) for x in hist_luminance_str.split(',')]
+        # Calculer l'entropie de la distribution (mesure de l'uniformité)
+        total_pixels_hist = sum(hist_values)
+        if total_pixels_hist > 0:
+            probabilities = [x / total_pixels_hist for x in hist_values if x > 0]
+            luminance_entropy = -sum(p * np.log2(p) for p in probabilities if p > 0)
+            luminance_uniformity = luminance_entropy / 8.0  # Normalisation (max théorique = 8 bits)
+    
+    # Système de score pondéré
+    criteria_scores = {}
+    total_weight = 0
+    weighted_score = 0
+    
+    # Critère 1: Luminosité (poids: 2.0) - CORRIGÉ: poubelle pleine = plus claire
+    brightness_weight = 2.0
+    if avg_brightness > BRIGHTNESS_THRESHOLD:  # Correction: < au lieu de >
+        criteria_scores['brightness'] = 1.0
+        weighted_score += brightness_weight
+    else:
+        criteria_scores['brightness'] = 0.0
+    total_weight += brightness_weight
+    
+    # Critère 2: Densité des contours (poids: 2.5)
+    edge_weight = 3.5
+    if edge_density > adjusted_edge_threshold:
+        criteria_scores['edges'] = 1.0
+        weighted_score += edge_weight
+    else:
+        criteria_scores['edges'] = 0.0
+    total_weight += edge_weight
+
+    # Critère 3: Non-uniformité de la luminance (poids: 1.0)
+    uniformity_weight = 1.0
+    uniformity_threshold = 0.6
+    if luminance_uniformity > uniformity_threshold:  # Plus de variation = plus plein
+        criteria_scores['uniformity'] = 1.0
+        weighted_score += uniformity_weight
+    else:
+        criteria_scores['uniformity'] = 0.0
+    total_weight += uniformity_weight
+    
+    # Score final normalisé
+    final_score = weighted_score / total_weight
+    confidence_score = abs(final_score - 0.5) * 2  # Distance de 0.5, normalisée
+    
+    # Classification avec seuil ajustable
+    classification_threshold = 0.45  # Seuil légèrement biaisé vers "vide"
+    
+    if final_score > classification_threshold:
+        classification = "pleine"
+        confidence = "haute" if confidence_score > 0.6 else "moyenne" if confidence_score > 0.3 else "faible"
+    else:
+        classification = "vide"
+        confidence = "haute" if confidence_score > 0.6 else "moyenne" if confidence_score > 0.3 else "faible"
+    
+    # Informations détaillées de debug
+    debug_info = {
+        'avg_brightness': round(avg_brightness, 2),
+        'brightness_threshold': BRIGHTNESS_THRESHOLD,
+        'edge_density': round(edge_density, 4),
+        'edge_threshold': round(adjusted_edge_threshold, 4),
+        'contrast': round(contrast, 2),
+        'contrast_threshold': CONTRAST_THRESHOLD,
+        'luminance_uniformity': round(luminance_uniformity, 3),
+        'final_score': round(final_score, 3),
+        'confidence_score': round(confidence_score, 3),
+        'criteria_scores': criteria_scores,
+        'confidence': confidence,
+        'resolution_factor': round(resolution_factor, 3)
+    }
+    
+    return classification, debug_info
 
 
 
