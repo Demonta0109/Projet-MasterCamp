@@ -52,6 +52,14 @@
     {% endif %}
     
     <form method="post">
+      <input type="hidden" name="avg_color" value="{{ image[7] }}">
+      <input type="hidden" name="edge_count" value="{{ image[9] }}">
+      <input type="hidden" name="contrast" value="{{ image[8] }}">
+      <input type="hidden" name="width" value="{{ image[4] }}">
+      <input type="hidden" name="height" value="{{ image[5] }}">
+      <input type="hidden" name="hist_luminance" value="{{ image[11] }}">
+      <input type="hidden" name="bin_edge_count" value="{{ image[12] or 0 }}">
+      <input type="hidden" name="bin_area" value="{{ image[13] or 1 }}">
       <button type="submit" name="annotation" value="pleine">Pleine</button>
       <button type="submit" name="annotation" value="vide">Vide</button>
       <button type="submit" name="annotation" value="Adeterminer">A determiner par l'IA</button>
@@ -75,6 +83,10 @@
     </script>
       <li>Contraste : {{ image[8] }}</li>
       <li>Contours détectés : {{ image[9] }}</li>
+      {% if image[12] and image[13] %}
+      <li>Contours dans la benne : {{ image[12] }} (région de {{ image[13] }} pixels)</li>
+      <li>Densité benne : {{ "%.4f"|format(image[12] / image[13]) }}</li>
+      {% endif %}
     </ul>
 
     <!-- Section de debug de l'algorithme amélioré -->
@@ -104,9 +116,15 @@
               <small style="color: #bdc3c7;">(seuil: 135)</small>
             </div>
             <div style="margin-bottom: 6px;">
-              🔍 <strong>Contours:</strong> {{ "%.4f"|format(image[9] / (image[4] * image[5])) }}
+              🔍 <strong>Contours (image):</strong> {{ "%.4f"|format(image[9] / (image[4] * image[5])) }}
               <small style="color: #bdc3c7;">(seuil: 0.11)</small>
             </div>
+            {% if image[12] and image[13] %}
+            <div style="margin-bottom: 6px;">
+              🎯 <strong>Contours (benne):</strong> {{ "%.4f"|format(image[12] / image[13]) }}
+              <small style="color: #bdc3c7;">(seuil: 0.15)</small>
+            </div>
+            {% endif %}
             <div>
               <strong>Uniformité:</strong> Variable
               <small style="color: #bdc3c7;">(analyse histogramme)</small>
@@ -121,6 +139,7 @@
             <div style="margin-bottom: 4px;">✅ Luminance perceptuelle (0.299R + 0.587G + 0.114B)</div>
             <div style="margin-bottom: 4px;">✅ Seuils adaptatifs selon résolution</div>
             <div style="margin-bottom: 4px;">✅ Pondération des critères</div>
+            <div style="margin-bottom: 4px;">✅ Analyse spécifique de la région de la benne</div>
             <div style="margin-bottom: 4px;">✅ Analyse de distribution</div>
             <div>✅ Score de confiance détaillé</div>
           </div>
@@ -154,12 +173,10 @@
         <summary style="cursor: pointer; font-size: 13px; color: #bdc3c7; padding: 5px 0;">Instructions de personnalisation</summary>
         <div style="margin-top: 10px; padding: 12px; background-color: rgba(241,196,15,0.1); border-radius: 6px; font-size: 12px; line-height: 1.4; color: #f1c40f; border-left: 3px solid #f39c12;">
           <strong>Pour ajuster l'algorithme, modifiez dans app.py :</strong><br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">BRIGHTNESS_THRESHOLD</code> : seuil de luminosité (120)<br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">EDGE_DENSITY_BASE_THRESHOLD</code> : seuil de contours (0.015)<br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">CONTRAST_THRESHOLD</code> : seuil de contraste (70)<br>
+          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">BRIGHTNESS_THRESHOLD</code> : seuil de luminosité (135)<br>
+          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">EDGE_DENSITY_BASE_THRESHOLD</code> : seuil de contours globaux (0.11)<br>
+          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">BIN_EDGE_DENSITY_THRESHOLD</code> : seuil de contours dans la benne (0.15)<br>
           • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">classification_threshold</code> : seuil de décision (0.45)
-          • <code>CONTRAST_THRESHOLD</code> : seuil de contraste (70)<br>
-          • <code>classification_threshold</code> : seuil de décision (0.45)
         </div>
       </details>
     </div>

@@ -35,7 +35,9 @@ def init_db():
             contrast REAL,
             edges INTEGER,
             histogram TEXT,
-            histogram_luminance TEXT
+            histogram_luminance TEXT,
+            bin_edges INTEGER,
+            bin_area INTEGER
         )
     ''')
     conn.commit()
@@ -56,19 +58,19 @@ def upload_image():
             path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path)
 
-            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance = extract_features(path)
+            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(path)
 
             # Classification automatique
             avg_rgb = eval(avg_color)  # Convertir la string en tuple
-            auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance)
+            auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
 
             conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
             c.execute("""INSERT INTO images 
-                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                 width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification))
+                 width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area))
             conn.commit()
             conn.close()
 
@@ -88,7 +90,22 @@ def annotate(filename):
             conn.close()
         else:
             # Si l'annotation est "A determiner", on lance la labellisation automatique
-            label_image(filename)
+            classification, debug_info = classify_bin_automatic(
+                eval(request.form['avg_color']),  # Convertir la string en tuple
+                int(request.form['edge_count']),
+                float(request.form['contrast']),
+                int(request.form['width']),
+                int(request.form['height']),
+                request.form['hist_luminance'],
+                int(request.form.get('bin_edge_count', 0)),  # Nouveau paramètre
+                int(request.form.get('bin_area', 1))  # Nouveau paramètre avec valeur par défaut pour éviter division par zéro
+            )
+            # Mettre à jour l'annotation dans la base de données
+            conn = sqlite3.connect('db.sqlite')
+            c = conn.cursor()
+            c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (classification, filename))
+            conn.commit()
+            conn.close()
         return redirect(url_for('upload_image'))
 
     conn = sqlite3.connect('db.sqlite')
@@ -145,8 +162,12 @@ def extract_features(image_path):
     gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
     contrast = float(np.max(gray) - np.min(gray))
 
+    # Détection des contours sur l'image entière
     edges = cv2.Canny(gray, 100, 200)
     edge_count = int(np.sum(edges > 0))
+    
+    # Détection de la région de la benne et calcul des contours dans cette région
+    bin_region_edges, bin_edge_count, bin_region_area = detect_bin_region_and_edges(img_array, gray)
 
     # Histogrammes des couleurs RGB
     hist_r = cv2.calcHist([img_array], [0], None, [256], [0, 256]).flatten()
@@ -158,15 +179,72 @@ def extract_features(image_path):
     hist_luminance = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
     hist_luminance_str = ','.join([f'{int(v)}' for v in hist_luminance])
 
-    return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str
+    return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str, bin_edge_count, bin_region_area
 
-def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_luminance_str=None):
+def detect_bin_region_and_edges(img_array, gray):
+    """
+    Détecte la région de la benne dans l'image et calcule les contours dans cette région uniquement
+    
+    Stratégies de détection :
+    1. Détection de formes rectangulaires/cylindriques (bennes typiques)
+    2. Segmentation par couleur (bennes souvent sombres/métalliques)
+    3. Détection de contours forts (bords de la benne)
+    4. Zone centrale de l'image (bennes souvent centrées)
+    """
+    
+    height, width = gray.shape
+    
+    # Stratégie 1: Détection de contours pour trouver les formes principales
+    edges_strong = cv2.Canny(gray, 50, 150)
+    contours, _ = cv2.findContours(edges_strong, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Trouver le plus grand contour (probablement la benne)
+    if contours:
+        largest_contour = max(contours, key=cv2.contourArea)
+        area = cv2.contourArea(largest_contour)
+        
+        # Si le contour est assez grand (au moins 10% de l'image), l'utiliser
+        if area > (width * height * 0.1):
+            # Créer un masque pour la région de la benne
+            mask = np.zeros(gray.shape, dtype=np.uint8)
+            cv2.fillPoly(mask, [largest_contour], 255)
+            
+            # Calculer les contours fins uniquement dans cette région
+            edges_fine = cv2.Canny(gray, 100, 200)
+            bin_region_edges = cv2.bitwise_and(edges_fine, mask)
+            bin_edge_count = int(np.sum(bin_region_edges > 0))
+            bin_region_area = int(area)
+            
+            return bin_region_edges, bin_edge_count, bin_region_area
+    
+    # Stratégie 2: Si pas de contour détecté, utiliser la région centrale
+    # (souvent les bennes sont au centre de l'image)
+    center_margin = 0.15  # 15% de marge de chaque côté
+    x_start = int(width * center_margin)
+    x_end = int(width * (1 - center_margin))
+    y_start = int(height * center_margin)
+    y_end = int(height * (1 - center_margin))
+    
+    # Créer un masque pour la région centrale
+    mask = np.zeros(gray.shape, dtype=np.uint8)
+    mask[y_start:y_end, x_start:x_end] = 255
+    
+    # Calculer les contours dans la région centrale
+    edges_fine = cv2.Canny(gray, 100, 200)
+    bin_region_edges = cv2.bitwise_and(edges_fine, mask)
+    bin_edge_count = int(np.sum(bin_region_edges > 0))
+    bin_region_area = int((x_end - x_start) * (y_end - y_start))
+    
+    return bin_region_edges, bin_edge_count, bin_region_area
+
+def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_luminance_str=None, bin_edge_count=None, bin_area=None):
     """
     Algorithme de classification automatique amélioré pour déterminer si une poubelle est vide ou pleine
     
     Améliorations:
     - Correction de la logique de luminosité
     - Ajout de l'analyse de la distribution de luminance
+    - Utilisation des contours spécifiques à la région de la benne
     - Pondération des critères
     - Seuils adaptatifs selon la taille de l'image
     """
@@ -174,6 +252,7 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     # Paramètres de classification ajustables
     BRIGHTNESS_THRESHOLD = 135  # Seuil de luminosité moyenne (0-255)
     EDGE_DENSITY_BASE_THRESHOLD = 0.11  # Seuil de base pour la densité des contours
+    BIN_EDGE_DENSITY_THRESHOLD = 0.15   # Seuil pour les contours dans la benne (plus élevé)
     CONTRAST_THRESHOLD = 245  # Seuil de contraste (abaissé pour plus de sensibilité)
     
     # Calculer la luminosité moyenne (moyenne pondérée RGB)
@@ -181,13 +260,20 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     # Utilisation de la formule de luminance perceptuelle
     avg_brightness = 0.299 * r + 0.587 * g + 0.114 * b
     
-    # Calculer la densité des contours avec adaptation selon la taille
+    # Calculer la densité des contours
     total_pixels = width * height
     edge_density = edge_count / total_pixels if total_pixels > 0 else 0
     
+    # Calculer la densité des contours dans la benne (prioritaire si disponible)
+    bin_edge_density = 0
+    if bin_edge_count is not None and bin_area is not None and bin_area > 0:
+        bin_edge_density = bin_edge_count / bin_area
+    
     # Ajustement du seuil selon la résolution (images plus grandes = plus de détails naturels)
+    # Ajustement plus doux du seuil selon la résolution (moins agressif)
     resolution_factor = min(1.0, (width * height) / (640 * 480))  # Normalisation à 640x480
-    adjusted_edge_threshold = EDGE_DENSITY_BASE_THRESHOLD * (1 + resolution_factor * 0.5)
+    adjusted_edge_threshold = EDGE_DENSITY_BASE_THRESHOLD * (1 + resolution_factor * 0.2)
+    adjusted_bin_edge_threshold = BIN_EDGE_DENSITY_THRESHOLD * (1 + resolution_factor * 0.1)
     
     # Analyse de la distribution de luminance (si disponible)
     luminance_uniformity = 0.5  # Valeur par défaut
@@ -214,13 +300,24 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
         criteria_scores['brightness'] = 0.0
     total_weight += brightness_weight
     
-    # Critère 2: Densité des contours (poids: 2.5)
-    edge_weight = 3.5
-    if edge_density > adjusted_edge_threshold:
-        criteria_scores['edges'] = 1.0
-        weighted_score += edge_weight
+    # Critère 2: Densité des contours dans la benne (prioritaire) ou globale (poids: 4.0)
+    edge_weight = 4.0
+    if bin_edge_count is not None and bin_area is not None:
+        # Utiliser la densité de contours dans la benne (plus précis)
+        if bin_edge_density > adjusted_bin_edge_threshold:
+            criteria_scores['bin_edges'] = 1.0
+            weighted_score += edge_weight
+        else:
+            criteria_scores['bin_edges'] = 0.0
+        criteria_scores['edges'] = 'N/A (utilise bin_edges)'
     else:
-        criteria_scores['edges'] = 0.0
+        # Fallback sur la densité globale
+        if edge_density > adjusted_edge_threshold:
+            criteria_scores['edges'] = 1.0
+            weighted_score += edge_weight
+        else:
+            criteria_scores['edges'] = 0.0
+        criteria_scores['bin_edges'] = 'N/A (utilise edges)'
     total_weight += edge_weight
 
     # Critère 3: Non-uniformité de la luminance (poids: 1.0)
@@ -253,6 +350,10 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
         'brightness_threshold': BRIGHTNESS_THRESHOLD,
         'edge_density': round(edge_density, 4),
         'edge_threshold': round(adjusted_edge_threshold, 4),
+        'bin_edge_density': round(bin_edge_density, 4) if bin_edge_count is not None else 'N/A',
+        'bin_edge_threshold': round(adjusted_bin_edge_threshold, 4) if bin_edge_count is not None else 'N/A',
+        'bin_edge_count': bin_edge_count if bin_edge_count is not None else 'N/A',
+        'bin_area': bin_area if bin_area is not None else 'N/A',
         'contrast': round(contrast, 2),
         'contrast_threshold': CONTRAST_THRESHOLD,
         'luminance_uniformity': round(luminance_uniformity, 3),
@@ -285,25 +386,6 @@ def image_detail(image_id):
         return render_template('detail.html', image=image)
     else:
         return "Image non trouvée", 404
-
-
-def label_image(filename):
-    """Cette fonction permet de labeliser l'image automatiquement.
-    Si elle est "pleine" ou "vide".
-    update la table images avec le label."""
-    conn = sqlite3.connect('db.sqlite')
-    c = conn.cursor()
-    c.execute("SELECT * FROM images WHERE filename = ?", (filename,))
-    image_data = c.fetchone()
-    if image_data:
-        # Logique de labellisation ici
-        # Exemple simple : si la couleur moyenne est claire, on considère l'image comme "pleine", sinon "vide"
-        avg_color = eval(image_data[7])  # Convertir la chaîne de caractères en
-        label = 'pleine' if sum(avg_color) > 382 else 'vide'
-        # Mettre à jour l'annotation dans la base de données
-        c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (label, filename))
-        conn.commit()
-    conn.close()
 
 @app.route('/dashboard')
 def dashboard():
