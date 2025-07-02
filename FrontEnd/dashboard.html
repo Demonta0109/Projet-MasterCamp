@@ -3,6 +3,19 @@
 <head>
     <title>Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #lineChart {
+            display: block;
+            margin: 30px auto 0 auto;
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            padding: 20px;
+            width: 90vw;
+            max-width: 1200px;
+            height: 400px;
+        }
+    </style>
 </head>
 <body>
     <h1>Dashboard</h1>
@@ -23,31 +36,57 @@
         const dateCounts = {};
 
         dates.forEach(date => {
-            dateCounts[date] = (dateCounts[date] || 0) + 1;
-        });
-
-        const labels = Object.keys(dateCounts);
-        const data = Object.values(dateCounts);
-
-        new Chart(document.getElementById('lineChart'), {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Images uploadées par jour',
-                    data: data,
-                    borderColor: 'rgb(75, 192, 192)',
-                    tension: 0.2
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    x: { title: { display: true, text: 'Date' } },
-                    y: { title: { display: true, text: 'Nombre d\'images' }, beginAtZero: true }
-                }
+            if (typeof date === 'string' && date.length === 10) {
+                dateCounts[date] = (dateCounts[date] || 0) + 1;
             }
         });
+
+        // Trie les dates dans l'ordre chronologique
+        const labels = Object.keys(dateCounts).sort();
+        const data = labels.map(date => dateCounts[date]);
+
+        if (labels.length > 0) {
+            new Chart(document.getElementById('lineChart'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Images uploadées par jour',
+                        data: data,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.15)',
+                        pointBackgroundColor: 'rgb(75, 192, 192)',
+                        pointRadius: 6,
+                        pointHoverRadius: 9,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: {
+                            display: true,
+                            text: 'Évolution des uploads par date',
+                            font: { size: 18 }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Date', font: { size: 15 } },
+                            grid: { color: '#e0e0e0' }
+                        },
+                        y: {
+                            title: { display: true, text: "Nombre d'images", font: { size: 15 } },
+                            beginAtZero: true,
+                            grid: { color: '#e0e0e0' },
+                            ticks: { stepSize: 1 }
+                        }
+                    }
+                }
+            });
+        }
     </script>
 </body>
 </html>
