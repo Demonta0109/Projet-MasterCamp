@@ -21,7 +21,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 def init_db():
     conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
-    #c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
+    c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
     c.execute('''
         CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
