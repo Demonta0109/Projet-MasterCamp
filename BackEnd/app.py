@@ -114,6 +114,27 @@ def extract_features(image_path):
 
     return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str
 
+@app.route('/images')
+def images():
+    conn = sqlite3.connect('db.sqlite')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, filename, annotation FROM images')
+    images = cursor.fetchall()
+    conn.close()
+    return render_template('gallery.html', images=images)
+
+@app.route('/image/<int:image_id>')
+def image_detail(image_id):
+    conn = sqlite3.connect('db.sqlite')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM images WHERE id = ?', (image_id,))
+    image = cursor.fetchone()
+    conn.close()
+    if image:
+        return render_template('detail.html', image=image)
+    else:
+        return "Image non trouvée", 404
+
 
 
 if __name__ == '__main__':

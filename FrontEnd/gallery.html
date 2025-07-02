@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Galerie des images</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Galerie d'images</h1>
+  </header>
+  <main>
+    <div style="display: flex; flex-wrap: wrap;">
+      {% for img in images %}
+      <div style="margin: 10px; text-align: center;">
+        <a href="{{ url_for('image_detail', image_id=img[0]) }}">
+          <img src="{{ url_for('static', filename='uploads/' + img[1]) }}" width="150">
+          <p>{{ img[2] }}</p>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    <br>
+    <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
+  </main>
+</body>
+</html>

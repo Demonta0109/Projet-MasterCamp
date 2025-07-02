@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Détail de l’image</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Détail de l’image</h1>
+  </header>
+  <main>
+    <img src="{{ url_for('static', filename='uploads/' + image[1]) }}" width="500"><br><br>
+    <ul>
+      <li><strong>Fichier :</strong> {{ image[1] }}</li>
+      <li><strong>Date :</strong> {{ image[2] }}</li>
+      <li><strong>Annotation :</strong> {{ image[3] }}</li>
+      <li><strong>Dimensions :</strong> {{ image[4] }} x {{ image[5] }} px</li>
+      <li><strong>Taille fichier :</strong> {{ image[6] }} Ko</li>
+      <li><strong>Couleur moyenne :</strong> {{ image[7] }}</li>
+      <li><strong>Contraste :</strong> {{ image[8] }}</li>
+      <li><strong>Contours :</strong> {{ image[9] }}</li>
+    </ul>
+    <a href="{{ url_for('images') }}">← Retour à la galerie</a>
+  </main>
+</body>
+</html>
