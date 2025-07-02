@@ -14,7 +14,7 @@
 
   <main>
     <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
-    <form method="post">
+    <form class="main-form" method="post">
       <button type="submit" name="annotation" value="pleine">Pleine</button>
       <button type="submit" name="annotation" value="vide">Vide</button>
       <button type="submit" name="annotation" value="Adeterminer">A determiner par l'IA</button>
