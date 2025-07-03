@@ -10,12 +10,23 @@
     <h1>Galerie d'images</h1>
   </header>
 <main>
+  {% if message %}
+  <div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
+    <strong>✅ {{ message }}</strong>
+  </div>
+  {% endif %}
+  
   <div class="gallery-grid">
     {% for img in images %}
     <div class="gallery-item {% if img[2] == 'pleine' %}pleine{% elif img[2] == 'vide' %}vide{% endif %}">
-      <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post">
-        <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')">&times;</button>
-      </form>
+      <div style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px;">
+        <form class="reanalyze-form" action="{{ url_for('reanalyze_image', image_id=img[0]) }}" method="post" style="display: inline;">
+          <button type="submit" title="Ré-analyser" onclick="return confirm('Ré-analyser cette image ?')" style="background: #007bff; color: white; border: none; border-radius: 3px; padding: 5px; cursor: pointer; font-size: 12px;">↻</button>
+        </form>
+        <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post" style="display: inline;">
+          <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')" style="background: #dc3545; color: white; border: none; border-radius: 3px; padding: 5px; cursor: pointer; font-size: 12px;">&times;</button>
+        </form>
+      </div>
       <a href="{{ url_for('image_detail', image_id=img[0]) }}">
         <img src="{{ url_for('static', filename='uploads/' + img[1]) }}" width="150">
       </a>
