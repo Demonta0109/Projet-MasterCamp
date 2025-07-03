@@ -37,7 +37,9 @@ def init_db():
             histogram TEXT,
             histogram_luminance TEXT,
             bin_edges INTEGER,
-            bin_area INTEGER
+            bin_area INTEGER,
+            latitude REAL,
+            longitude REAL
         )
     ''')
     conn.commit()
@@ -60,23 +62,35 @@ def upload_image():
 
             width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(path)
 
-            # Classification automatique
-            avg_rgb = eval(avg_color)  # Convertir la string en tuple
+            avg_rgb = eval(avg_color)
             auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
 
             conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
-            c.execute("""INSERT INTO images 
-                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            c.execute("""INSERT INTO images \
+                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area, latitude, longitude) \
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)""",
                 (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                  width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area))
             conn.commit()
             conn.close()
 
-            return redirect(url_for('annotate', filename=filename))
+            return redirect(url_for('validate_location', filename=filename))
     return render_template('upload.html')
 
+
+@app.route('/validate_location/<filename>', methods=['GET', 'POST'])
+def validate_location(filename):
+    if request.method == 'POST':
+        latitude = request.form.get('latitude')
+        longitude = request.form.get('longitude')
+        conn = sqlite3.connect('db.sqlite')
+        c = conn.cursor()
+        c.execute("UPDATE images SET latitude = ?, longitude = ? WHERE filename = ?", (latitude, longitude, filename))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('annotate', filename=filename))
+    return render_template('validate_location.html', filename=filename)
 
 @app.route('/annotate/<filename>', methods=['GET', 'POST'])
 def annotate(filename):
@@ -431,6 +445,10 @@ def dashboard():
     # On ne garde que les dates valides (non nulles et non vides)
     dates = [row[0][:10] for row in c.fetchall() if row[0] and len(row[0]) >= 10]  # Juste la date (AAAA-MM-JJ)
 
+    # Récupérer les données des bennes pour la carte
+    c.execute("SELECT latitude, longitude, annotation, filename FROM images WHERE latitude IS NOT NULL AND longitude IS NOT NULL")
+    bins = c.fetchall()
+
     conn.close()
 
     # Pie chart annotation
@@ -463,8 +481,18 @@ def dashboard():
                            empty=empty_count,
                            pie_chart=pie_png,
                            hist_chart=hist_png,
-                           dates=dates)
+                           dates=dates,
+                           bins=[{'lat': row[0], 'lng': row[1], 'annotation': row[2], 'filename': row[3]} for row in bins] if 'bins' in locals() else [])
 
+
+@app.route('/bin_map')
+def bin_map():
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    c.execute("SELECT latitude, longitude, annotation, filename FROM images WHERE latitude IS NOT NULL AND longitude IS NOT NULL")
+    bins = c.fetchall()
+    conn.close()
+    return render_template('bin_map.html', bins=bins)
 
 @app.route('/delete/<int:image_id>', methods=['POST'])
 def delete_image(image_id):

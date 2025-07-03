@@ -94,57 +94,85 @@
     </div>
     <h2>Évolution des uploads par date</h2>
     <canvas id="lineChart" width="1200" height="400"></canvas>
-  </div>
-  <script>
-    const dates = {{ dates | tojson }};
-    const dateCounts = {};
-    dates.forEach(date => {
-      if (typeof date === 'string' && date.length === 10) {
-        dateCounts[date] = (dateCounts[date] || 0) + 1;
-      }
-    });
-    const labels = Object.keys(dateCounts).sort();
-    const data = labels.map(date => dateCounts[date]);
-    if (labels.length > 0) {
-      new Chart(document.getElementById('lineChart'), {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Images uploadées par jour',
-            data: data,
-            borderColor: 'rgb(75, 192, 192)',
-            backgroundColor: 'rgba(75, 192, 192, 0.15)',
-            pointBackgroundColor: 'rgb(75, 192, 192)',
-            pointRadius: 6,
-            pointHoverRadius: 9,
-            fill: true,
-            tension: 0.3
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: { display: false },
-            title: {
-              display: false
-            }
-          },
-          scales: {
-            x: {
-              title: { display: true, text: 'Date', font: { size: 15 } },
-              grid: { color: '#e0e0e0' }
-            },
-            y: {
-              title: { display: true, text: "Nombre d'images", font: { size: 15 } },
-              beginAtZero: true,
-              grid: { color: '#e0e0e0' },
-              ticks: { stepSize: 1 }
-            }
+    <h2>Carte des localisations des poubelles</h2>
+    <div id="map" style="height: 500px; margin-bottom: 30px; border-radius: 12px;"></div>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="text/javascript">
+      // Déclaration unique des données côté JS
+      var bins = {{ bins | tojson | safe }};
+      var dates = {{ dates | tojson | safe }};
+      // Affichage de la carte des poubelles
+      (function() {
+        const map = L.map('map').setView([48.8566, 2.3522], 6);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        bins.forEach(bin => {
+          if (bin.lat && bin.lng) {
+            const color = bin.annotation === 'pleine' ? 'red' : 'green';
+            const marker = L.circleMarker([bin.lat, bin.lng], {
+              color: color,
+              fillColor: color,
+              fillOpacity: 0.7,
+              radius: 10
+            }).addTo(map);
+            marker.bindPopup(`<b>${bin.annotation === 'pleine' ? 'Pleine' : 'Vide'}</b><br>${bin.filename}`);
           }
+        });
+      })();
+      // Graphe des dates
+      (function() {
+        const dateCounts = {};
+        dates.forEach(date => {
+          if (typeof date === 'string' && date.length === 10) {
+            dateCounts[date] = (dateCounts[date] || 0) + 1;
+          }
+        });
+        const labels = Object.keys(dateCounts).sort();
+        const data = labels.map(date => dateCounts[date]);
+        if (labels.length > 0) {
+          new Chart(document.getElementById('lineChart'), {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [{
+                label: 'Images uploadées par jour',
+                data: data,
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.15)',
+                pointBackgroundColor: 'rgb(75, 192, 192)',
+                pointRadius: 6,
+                pointHoverRadius: 9,
+                fill: true,
+                tension: 0.3
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: false },
+                title: {
+                  display: false
+                }
+              },
+              scales: {
+                x: {
+                  title: { display: true, text: 'Date', font: { size: 15 } },
+                  grid: { color: '#e0e0e0' }
+                },
+                y: {
+                  title: { display: true, text: "Nombre d'images", font: { size: 15 } },
+                  beginAtZero: true,
+                  grid: { color: '#e0e0e0' },
+                  ticks: { stepSize: 1 }
+                }
+              }
+            }
+          });
         }
-      });
-    }
-  </script>
+      })();
+    </script>
+  </div>
 </body>
 </html>

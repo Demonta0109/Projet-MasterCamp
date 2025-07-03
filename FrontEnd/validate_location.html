@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Valider la localisation</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    #map { height: 400px; margin-bottom: 20px; }
+    .center { text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="center">
+    <h1>Valider la position de la poubelle</h1>
+    <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
+    <form method="post">
+      <div id="map"></div>
+      <input type="hidden" name="latitude" id="latitude">
+      <input type="hidden" name="longitude" id="longitude">
+      <button type="submit">Valider la position</button>
+    </form>
+    <a href="{{ url_for('upload_image') }}">Annuler</a>
+  </div>
+  <script>
+    const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+    let marker;
+    map.on('click', function(e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+        document.getElementById('latitude').value = lat;
+        document.getElementById('longitude').value = lng;
+        if (marker) {
+            marker.setLatLng(e.latlng);
+        } else {
+            marker = L.marker(e.latlng).addTo(map);
+        }
+    });
+  </script>
+</body>
+</html>
