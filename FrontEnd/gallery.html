@@ -10,6 +10,13 @@
     <h1>Galerie d'images</h1>
   </header>
 <main>
+  <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
+  {% if message %}
+  <div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
+    <strong>✅ {{ message }}</strong>
+  </div>
+  {% endif %}
+  
   <form method="get" action="{{ url_for('images') }}" style="margin-bottom: 1.5rem; text-align:center;">
     <label>
       <input type="radio" name="filtre" value="" {% if not request.args.get('filtre') %}checked{% endif %}> Tous
@@ -35,7 +42,6 @@
     {% endfor %}
   </div>
   <br>
-  <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
 </main>
 </body>
 </html>
