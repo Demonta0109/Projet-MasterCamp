@@ -390,10 +390,16 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
 
 @app.route('/images')
 def images():
+    filtre = request.args.get('filtre')
     conn = sqlite3.connect('db.sqlite')
-    cursor = conn.cursor()
-    cursor.execute('SELECT id, filename, annotation FROM images')
-    images = cursor.fetchall()
+    c = conn.cursor()
+    if filtre == 'pleine':
+        c.execute("SELECT * FROM images WHERE annotation = 'pleine'")
+    elif filtre == 'vide':
+        c.execute("SELECT * FROM images WHERE annotation = 'vide'")
+    else:
+        c.execute("SELECT * FROM images")
+    images = c.fetchall()
     conn.close()
     return render_template('gallery.html', images=images)
 
@@ -482,6 +488,8 @@ def delete_image(image_id):
         conn.commit()
     conn.close()
     return redirect(url_for('images'))
+
+
 
 
 if __name__ == '__main__':
