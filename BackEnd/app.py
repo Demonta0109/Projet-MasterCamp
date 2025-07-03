@@ -1,7 +1,8 @@
 # app.py
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 import os
 import sqlite3
+import hashlib
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from PIL import Image
@@ -37,7 +38,8 @@ def init_db():
             histogram TEXT,
             histogram_luminance TEXT,
             bin_edges INTEGER,
-            bin_area INTEGER
+            bin_area INTEGER,
+            file_hash TEXT UNIQUE
         )
     ''')
     conn.commit()
@@ -52,30 +54,228 @@ def allowed_file(filename):
 @app.route('/', methods=['GET', 'POST'])
 def upload_image():
     if request.method == 'POST':
-        file = request.files['image']
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(path)
+        upload_type = request.form.get('upload_type', 'single')
+        reanalyze = request.form.get('reanalyze') == 'true'
+        processed_files = []
+        duplicates = []
+        reanalyzed = []
+        errors = []
+        
+        if upload_type == 'single':
+            # Mode single file (existant)
+            file = request.files.get('image')
+            if file and allowed_file(file.filename):
+                result = process_single_file(file, reanalyze=reanalyze)
+                if result['success']:
+                    if result['type'] == 'reanalyzed':
+                        reanalyzed.append(result)
+                    else:
+                        processed_files.append(result['filename'])
+                else:
+                    if result['type'] == 'duplicate':
+                        duplicates.append(result)
+                    else:
+                        errors.append(result)
+                
+        elif upload_type == 'multiple':
+            # Mode multiple files
+            files = request.files.getlist('images')
+            for file in files:
+                if file and file.filename and allowed_file(file.filename):
+                    result = process_single_file(file, reanalyze=reanalyze)
+                    if result['success']:
+                        if result['type'] == 'reanalyzed':
+                            reanalyzed.append(result)
+                        else:
+                            processed_files.append(result['filename'])
+                    else:
+                        if result['type'] == 'duplicate':
+                            duplicates.append(result)
+                        else:
+                            errors.append(result)
+                    
+        elif upload_type == 'folder':
+            # Mode folder
+            files = request.files.getlist('folder')
+            for file in files:
+                if file and file.filename and allowed_file(file.filename):
+                    result = process_single_file(file, reanalyze=reanalyze)
+                    if result['success']:
+                        if result['type'] == 'reanalyzed':
+                            reanalyzed.append(result)
+                        else:
+                            processed_files.append(result['filename'])
+                    else:
+                        if result['type'] == 'duplicate':
+                            duplicates.append(result)
+                        else:
+                            errors.append(result)
+        
+        # Construire le message de résultat
+        message_parts = []
+        if processed_files:
+            message_parts.append(f"{len(processed_files)} nouvelle(s) image(s) traitée(s)")
+        if reanalyzed:
+            message_parts.append(f"{len(reanalyzed)} image(s) ré-analysée(s)")
+        if duplicates:
+            message_parts.append(f"{len(duplicates)} doublon(s) ignoré(s)")
+        if errors:
+            message_parts.append(f"{len(errors)} erreur(s)")
+        
+        message = " • ".join(message_parts) if message_parts else "Aucun fichier traité"
+        
+        if processed_files or reanalyzed:
+            if len(processed_files) == 1 and not reanalyzed and not duplicates and not errors:
+                # Une seule nouvelle image traitée sans complications, rediriger vers la page d'annotation
+                return redirect(url_for('annotate', filename=processed_files[0]))
+            else:
+                # Plusieurs images ou ré-analyses, rediriger vers la galerie avec un message détaillé
+                return redirect(url_for('images', 
+                                      message=message,
+                                      duplicates=len(duplicates),
+                                      reanalyzed=len(reanalyzed),
+                                      errors=len(errors)))
+        else:
+            # Aucun fichier traité avec succès
+            return redirect(url_for('upload_image', 
+                                  error_message=message))
+            
+    # Afficher le message d'erreur s'il y en a un
+    error_message = request.args.get('error_message')
+    return render_template('upload.html', error_message=error_message)
 
-            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(path)
-
-            # Classification automatique
-            avg_rgb = eval(avg_color)  # Convertir la string en tuple
+def process_single_file(file, reanalyze=False):
+    """
+    Traite un seul fichier et l'insère en base de données
+    
+    Args:
+        file: Le fichier à traiter
+        reanalyze: Si True, ré-analyse les doublons au lieu de les ignorer
+    
+    Returns:
+        dict: Résultat du traitement avec les clés :
+        - success: bool
+        - filename: str (si succès)
+        - message: str
+        - type: str ('success', 'duplicate', 'error', 'reanalyzed')
+        - duplicate_info: dict (si doublon détecté)
+    """
+    filename = secure_filename(file.filename)
+    
+    # Créer un fichier temporaire pour vérifier les doublons
+    temp_path = os.path.join(app.config['UPLOAD_FOLDER'], f"temp_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{filename}")
+    file.save(temp_path)
+    
+    try:
+        # Vérification des doublons
+        is_duplicate, duplicate_info = is_duplicate_file(temp_path, filename)
+        if is_duplicate and not reanalyze:
+            # Si c'est un doublon et qu'on ne ré-analyse pas, supprimer le fichier temporaire
+            os.remove(temp_path)
+            return {
+                'success': False,
+                'message': duplicate_info['message'],
+                'type': 'duplicate',
+                'duplicate_info': duplicate_info,
+                'original_filename': filename
+            }
+        elif is_duplicate and reanalyze:
+            # Ré-analyser le doublon : utiliser le fichier existant et mettre à jour la base
+            existing_filename = duplicate_info['filename']
+            existing_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_filename)
+            
+            # Supprimer le fichier temporaire (on utilise l'existant)
+            os.remove(temp_path)
+            
+            # Si le nouveau fichier a un contenu différent, remplacer l'ancien
+            if duplicate_info['type'] == 'filename':  # Même nom mais contenu différent
+                # Remplacer le fichier existant par le nouveau
+                final_path = existing_path
+                file.seek(0)  # Rembobiner le fichier
+                file.save(final_path)
+            else:
+                # Même contenu, garder le fichier existant
+                final_path = existing_path
+            
+            # Ré-analyser avec les nouvelles métriques
+            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(final_path)
+            avg_rgb = eval(avg_color)
             auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
-
+            file_hash = calculate_file_hash(final_path)
+            
+            # Mettre à jour la base de données
             conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
-            c.execute("""INSERT INTO images 
-                (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                 width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area))
+            c.execute("""UPDATE images SET 
+                upload_date = ?, width = ?, height = ?, filesize = ?, avg_color = ?, 
+                contrast = ?, edges = ?, histogram = ?, histogram_luminance = ?, 
+                annotation = ?, bin_edges = ?, bin_area = ?, file_hash = ?
+                WHERE id = ?""",
+                (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                 width, height, filesize, avg_color, contrast, edge_count, histogram, 
+                 histogram_luminance, auto_classification, bin_edge_count, bin_area, 
+                 file_hash, duplicate_info['id']))
             conn.commit()
             conn.close()
+            
+            return {
+                'success': True,
+                'filename': existing_filename,
+                'message': f"Image {existing_filename} ré-analysée avec succès",
+                'type': 'reanalyzed',
+                'original_id': duplicate_info['id']
+            }
+        
+        # Si pas de doublon, traitement normal
+        final_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        # Éviter les conflits de noms dans le système de fichiers
+        if os.path.exists(final_path):
+            name, ext = os.path.splitext(filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"{name}_{timestamp}{ext}"
+            final_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        os.rename(temp_path, final_path)
+        
+        # Extraction des caractéristiques
+        width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(final_path)
 
-            return redirect(url_for('annotate', filename=filename))
-    return render_template('upload.html')
+        # Classification automatique
+        avg_rgb = eval(avg_color)  # Convertir la string en tuple
+        auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
+
+        # Calculer le hash pour la base de données
+        file_hash = calculate_file_hash(final_path)
+
+        # Insertion en base de données
+        conn = sqlite3.connect('db.sqlite')
+        c = conn.cursor()
+        c.execute("""INSERT INTO images 
+            (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area, file_hash) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+             width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area, file_hash))
+        conn.commit()
+        conn.close()
+
+        return {
+            'success': True,
+            'filename': filename,
+            'message': f"Image {filename} analysée avec succès",
+            'type': 'success'
+        }
+        
+    except Exception as e:
+        # Nettoyer en cas d'erreur
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        return {
+            'success': False,
+            'message': f"Erreur lors du traitement de {filename}: {str(e)}",
+            'type': 'error',
+            'original_filename': filename
+        }
 
 
 @app.route('/annotate/<filename>', methods=['GET', 'POST'])
@@ -401,7 +601,7 @@ def images():
         c.execute("SELECT * FROM images")
     images = c.fetchall()
     conn.close()
-    return render_template('gallery.html', images=images)
+    return render_template('gallery.html', images=images, message=message)
 
 @app.route('/image/<int:image_id>')
 def image_detail(image_id):
@@ -489,6 +689,178 @@ def delete_image(image_id):
     conn.close()
     return redirect(url_for('images'))
 
+@app.route('/upload_ajax', methods=['POST'])
+def upload_ajax():
+    """Route AJAX pour le traitement des uploads multiples avec progression"""
+    upload_type = request.form.get('upload_type', 'single')
+    reanalyze = request.form.get('reanalyze') == 'true'
+    processed_files = []
+    duplicates = []
+    reanalyzed = []
+    errors = []
+    total_files = 0
+    
+    try:
+        if upload_type == 'single':
+            files = [request.files.get('image')]
+        elif upload_type == 'multiple':
+            files = request.files.getlist('images')
+        elif upload_type == 'folder':
+            files = request.files.getlist('folder')
+        else:
+            return jsonify({'error': 'Type d\'upload invalide'}), 400
+        
+        # Filtrer les fichiers valides
+        valid_files = [f for f in files if f and f.filename and allowed_file(f.filename)]
+        total_files = len(valid_files)
+        
+        if total_files == 0:
+            return jsonify({'error': 'Aucun fichier valide trouvé'}), 400
+        
+        for i, file in enumerate(valid_files):
+            try:
+                result = process_single_file(file, reanalyze=reanalyze)
+                
+                if result['success']:
+                    if result['type'] == 'reanalyzed':
+                        reanalyzed.append(result)
+                    else:
+                        processed_files.append(result['filename'])
+                else:
+                    if result['type'] == 'duplicate':
+                        duplicates.append(result)
+                    else:
+                        errors.append(result)
+                
+                # Progression
+                progress = ((i + 1) / total_files) * 100
+                
+            except Exception as e:
+                error_result = {
+                    'success': False,
+                    'message': f"Erreur lors du traitement de {file.filename}: {str(e)}",
+                    'type': 'error',
+                    'original_filename': file.filename
+                }
+                errors.append(error_result)
+                continue
+        
+        return jsonify({
+            'success': True,
+            'processed_count': len(processed_files),
+            'reanalyzed_count': len(reanalyzed),
+            'duplicate_count': len(duplicates),
+            'error_count': len(errors),
+            'total_count': total_files,
+            'files': processed_files,
+            'reanalyzed': [r['message'] for r in reanalyzed],
+            'duplicates': [d['message'] for d in duplicates],
+            'errors': [e['message'] for e in errors]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Erreur lors du traitement: {str(e)}'}), 500
+        
+
+def calculate_file_hash(file_path):
+    """Calcule le hash SHA-256 d'un fichier"""
+    hash_sha256 = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_sha256.update(chunk)
+    return hash_sha256.hexdigest()
+
+def is_duplicate_file(file_path, filename):
+    """
+    Vérifie si un fichier est un doublon basé sur le hash et/ou le nom
+    
+    Returns:
+        tuple: (is_duplicate, duplicate_info)
+        - is_duplicate: bool, True si c'est un doublon
+        - duplicate_info: dict avec les infos du doublon ou None
+    """
+    file_hash = calculate_file_hash(file_path)
+    
+    conn = sqlite3.connect('db.sqlite')
+    c = conn.cursor()
+    
+    # Vérifier d'abord par hash (plus fiable)
+    c.execute("SELECT id, filename, upload_date, annotation FROM images WHERE file_hash = ?", (file_hash,))
+    hash_duplicate = c.fetchone()
+    
+    if hash_duplicate:
+        conn.close()
+        return True, {
+            'type': 'hash',
+            'id': hash_duplicate[0],
+            'filename': hash_duplicate[1],
+            'upload_date': hash_duplicate[2],
+            'annotation': hash_duplicate[3],
+            'message': f"Fichier identique déjà analysé (même contenu): {hash_duplicate[1]}"
+        }
+    
+    # Vérifier ensuite par nom de fichier
+    c.execute("SELECT id, filename, upload_date, annotation FROM images WHERE filename = ?", (filename,))
+    name_duplicate = c.fetchone()
+    
+    conn.close()
+    
+    if name_duplicate:
+        return True, {
+            'type': 'filename',
+            'id': name_duplicate[0],
+            'filename': name_duplicate[1],
+            'upload_date': name_duplicate[2],
+            'annotation': name_duplicate[3],
+            'message': f"Fichier avec le même nom déjà analysé: {name_duplicate[1]}"
+        }
+    
+    return False, None
+
+@app.route('/reanalyze/<int:image_id>', methods=['POST'])
+def reanalyze_image(image_id):
+    """Route pour ré-analyser une image spécifique depuis la galerie"""
+    try:
+        conn = sqlite3.connect('db.sqlite')
+        c = conn.cursor()
+        c.execute("SELECT filename FROM images WHERE id = ?", (image_id,))
+        row = c.fetchone()
+        conn.close()
+        
+        if not row:
+            return redirect(url_for('images', message="Image non trouvée"))
+        
+        filename = row[0]
+        image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        if not os.path.exists(image_path):
+            return redirect(url_for('images', message=f"Fichier {filename} non trouvé sur le disque"))
+        
+        # Ré-analyser l'image
+        width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(image_path)
+        avg_rgb = eval(avg_color)
+        auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
+        file_hash = calculate_file_hash(image_path)
+        
+        # Mettre à jour la base de données
+        conn = sqlite3.connect('db.sqlite')
+        c = conn.cursor()
+        c.execute("""UPDATE images SET 
+            upload_date = ?, width = ?, height = ?, filesize = ?, avg_color = ?, 
+            contrast = ?, edges = ?, histogram = ?, histogram_luminance = ?, 
+            annotation = ?, bin_edges = ?, bin_area = ?, file_hash = ?
+            WHERE id = ?""",
+            (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+             width, height, filesize, avg_color, contrast, edge_count, histogram, 
+             histogram_luminance, auto_classification, bin_edge_count, bin_area, 
+             file_hash, image_id))
+        conn.commit()
+        conn.close()
+        
+        return redirect(url_for('images', message=f"Image {filename} ré-analysée avec succès"))
+        
+    except Exception as e:
+        return redirect(url_for('images', message=f"Erreur lors de la ré-analyse: {str(e)}"))
 
 
 

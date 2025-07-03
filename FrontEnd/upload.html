@@ -15,10 +15,214 @@
     </nav>
   </header>
   <main>
+    {% if error_message %}
+    <div style="background-color: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #f5c6cb;">
+      <strong>⚠️ {{ error_message }}</strong>
+    </div>
+    {% endif %}
+    
     <form class="main-form" method="post" enctype="multipart/form-data">
-      <input type="file" name="image" required>
-      <button type="submit">Uploader</button>
+      <div style="margin-bottom: 20px;">
+        <h3>Sélectionner des images :</h3>
+        <label style="display: block; margin-bottom: 10px;">
+          <input type="radio" name="upload_type" value="single" checked onchange="toggleUploadMode()"> 
+          Une seule image
+        </label>
+        <label style="display: block; margin-bottom: 10px;">
+          <input type="radio" name="upload_type" value="multiple" onchange="toggleUploadMode()"> 
+          Plusieurs images
+        </label>
+        <label style="display: block; margin-bottom: 15px;">
+          <input type="radio" name="upload_type" value="folder" onchange="toggleUploadMode()"> 
+          Dossier entier
+        </label>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <label style="display: flex; align-items: center; gap: 10px;">
+          <input type="checkbox" name="reanalyze" value="true" id="reanalyze-checkbox"> 
+          <span>Ré-analyser les images déjà uploadées (met à jour les données existantes)</span>
+        </label>
+        <small style="display: block; color: #666; margin-top: 5px; margin-left: 25px;">
+          Si activé, les doublons seront ré-analysés au lieu d'être ignorés
+        </small>
+      </div>
+      
+      <div id="single-upload" style="margin-bottom: 15px;">
+        <input type="file" name="image" accept=".png,.jpg,.jpeg,.webp">
+      </div>
+      
+      <div id="multiple-upload" style="display: none; margin-bottom: 15px;">
+        <input type="file" name="images" multiple accept=".png,.jpg,.jpeg,.webp">
+        <small style="display: block; color: #666; margin-top: 5px;">
+          Maintenez Ctrl (ou Cmd sur Mac) pour sélectionner plusieurs fichiers
+        </small>
+      </div>
+      
+      <div id="folder-upload" style="display: none; margin-bottom: 15px;">
+        <input type="file" name="folder" webkitdirectory directory accept=".png,.jpg,.jpeg,.webp">
+        <small style="display: block; color: #666; margin-top: 5px;">
+          Sélectionnez un dossier contenant des images
+        </small>
+      </div>
+      
+      <button type="submit" id="upload-btn">Uploader</button>
+      
+      <div id="progress-container" style="display: none; margin-top: 20px;">
+        <div style="background-color: #f0f0f0; border-radius: 10px; padding: 3px;">
+          <div id="progress-bar" style="width: 0%; background-color: #007bff; height: 20px; border-radius: 8px; transition: width 0.3s;"></div>
+        </div>
+        <p id="progress-text">Traitement en cours...</p>
+      </div>
     </form>
+    
+    <script>
+      function toggleUploadMode() {
+        const uploadType = document.querySelector('input[name="upload_type"]:checked').value;
+        const singleUpload = document.getElementById('single-upload');
+        const multipleUpload = document.getElementById('multiple-upload');
+        const folderUpload = document.getElementById('folder-upload');
+        const uploadBtn = document.getElementById('upload-btn');
+        
+        // Cacher tous les modes
+        singleUpload.style.display = 'none';
+        multipleUpload.style.display = 'none';
+        folderUpload.style.display = 'none';
+        
+        // Retirer l'attribut required de tous les inputs
+        singleUpload.querySelector('input').removeAttribute('required');
+        multipleUpload.querySelector('input').removeAttribute('required');
+        folderUpload.querySelector('input').removeAttribute('required');
+        
+        // Afficher le mode sélectionné et ajouter required
+        if (uploadType === 'single') {
+          singleUpload.style.display = 'block';
+          singleUpload.querySelector('input').setAttribute('required', '');
+          uploadBtn.textContent = 'Uploader';
+        } else if (uploadType === 'multiple') {
+          multipleUpload.style.display = 'block';
+          multipleUpload.querySelector('input').setAttribute('required', '');
+          uploadBtn.textContent = 'Uploader les images';
+        } else if (uploadType === 'folder') {
+          folderUpload.style.display = 'block';
+          folderUpload.querySelector('input').setAttribute('required', '');
+          uploadBtn.textContent = 'Analyser le dossier';
+        }
+      }
+      
+      // Gestion du formulaire pour afficher la progression
+      document.querySelector('.main-form').addEventListener('submit', function(e) {
+        const uploadType = document.querySelector('input[name="upload_type"]:checked').value;
+        const progressContainer = document.getElementById('progress-container');
+        const uploadBtn = document.getElementById('upload-btn');
+        
+        if (uploadType !== 'single') {
+          e.preventDefault(); // Empêcher la soumission normale
+          
+          const formData = new FormData(this);
+          
+          progressContainer.style.display = 'block';
+          uploadBtn.disabled = true;
+          uploadBtn.textContent = 'Traitement en cours...';
+          
+          // Utiliser fetch pour l'upload AJAX
+          fetch('/upload_ajax', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              // Construire le message de succès détaillé
+              let messageParts = [];
+              if (data.processed_count > 0) {
+                messageParts.push(`${data.processed_count} nouvelle(s) image(s) traitée(s)`);
+              }
+              if (data.reanalyzed_count > 0) {
+                messageParts.push(`${data.reanalyzed_count} image(s) ré-analysée(s)`);
+              }
+              if (data.duplicate_count > 0) {
+                messageParts.push(`${data.duplicate_count} doublon(s) ignoré(s)`);
+              }
+              if (data.error_count > 0) {
+                messageParts.push(`${data.error_count} erreur(s)`);
+              }
+              
+              let message = messageParts.join(' • ');
+              
+              // Afficher les détails si nécessaire
+              let detailMessage = '';
+              if (data.reanalyzed && data.reanalyzed.length > 0) {
+                detailMessage += '\\n\\nRé-analyses effectuées:\\n' + data.reanalyzed.join('\\n');
+              }
+              if (data.duplicates && data.duplicates.length > 0) {
+                detailMessage += '\\n\\nDoublons ignorés:\\n' + data.duplicates.join('\\n');
+              }
+              if (data.errors && data.errors.length > 0) {
+                detailMessage += '\\n\\nErreurs:\\n' + data.errors.join('\\n');
+              }
+              
+              if (detailMessage && (data.duplicate_count > 0 || data.error_count > 0 || data.reanalyzed_count > 0)) {
+                alert(message + detailMessage);
+              }
+              
+              // Rediriger vers la galerie avec message
+              const encodedMessage = encodeURIComponent(message);
+              window.location.href = `/images?message=${encodedMessage}`;
+            } else {
+              // Erreur
+              alert('Erreur: ' + (data.error || 'Erreur inconnue'));
+              progressContainer.style.display = 'none';
+              uploadBtn.disabled = false;
+              uploadBtn.textContent = getButtonText();
+            }
+          })
+          .catch(error => {
+            console.error('Erreur:', error);
+            alert('Erreur lors de l\'upload: ' + error.message);
+            progressContainer.style.display = 'none';
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = getButtonText();
+          });
+        }
+      });
+      
+      function getButtonText() {
+        const uploadType = document.querySelector('input[name="upload_type"]:checked').value;
+        if (uploadType === 'single') return 'Uploader';
+        if (uploadType === 'multiple') return 'Uploader les images';
+        if (uploadType === 'folder') return 'Analyser le dossier';
+        return 'Uploader';
+      }
+      
+      // Afficher le nombre de fichiers sélectionnés
+      document.addEventListener('change', function(e) {
+        if (e.target.type === 'file') {
+          const files = e.target.files;
+          const uploadType = document.querySelector('input[name="upload_type"]:checked').value;
+          
+          if (files.length > 1 || uploadType === 'folder') {
+            let statusElement = e.target.parentNode.querySelector('.file-status');
+            if (!statusElement) {
+              statusElement = document.createElement('div');
+              statusElement.className = 'file-status';
+              statusElement.style.cssText = 'margin-top: 5px; font-size: 12px; color: #007bff;';
+              e.target.parentNode.appendChild(statusElement);
+            }
+            
+            if (uploadType === 'folder') {
+              const imageFiles = Array.from(files).filter(file => 
+                file.type.startsWith('image/') || 
+                /\.(png|jpg|jpeg|webp)$/i.test(file.name)
+              );
+              statusElement.textContent = `${imageFiles.length} images trouvées dans le dossier`;
+            } else {
+              statusElement.textContent = `${files.length} fichiers sélectionnés`;
+            }
+          }
+        }
+      });
+    </script>
   </main>
 
 </body>
