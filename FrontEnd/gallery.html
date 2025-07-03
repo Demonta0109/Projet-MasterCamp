@@ -17,17 +17,24 @@
   </div>
   {% endif %}
   
+  <form method="get" action="{{ url_for('images') }}" style="margin-bottom: 1.5rem; text-align:center;">
+    <label>
+      <input type="radio" name="filtre" value="" {% if not request.args.get('filtre') %}checked{% endif %}> Tous
+    </label>
+    <label style="margin-left:1em;">
+      <input type="radio" name="filtre" value="pleine" {% if request.args.get('filtre') == 'pleine' %}checked{% endif %}> Pleine
+    </label>
+    <label style="margin-left:1em;">
+      <input type="radio" name="filtre" value="vide" {% if request.args.get('filtre') == 'vide' %}checked{% endif %}> Vide
+    </label>
+    <button type="submit" style="margin-left:1em;">Filtrer</button>
+</form>
   <div class="gallery-grid">
     {% for img in images %}
-    <div class="gallery-item {% if img[2] == 'pleine' %}pleine{% elif img[2] == 'vide' %}vide{% endif %}">
-      <div style="position: absolute; top: 5px; right: 5px; display: flex; gap: 5px;">
-        <form class="reanalyze-form" action="{{ url_for('reanalyze_image', image_id=img[0]) }}" method="post" style="display: inline;">
-          <button type="submit" title="Ré-analyser" onclick="return confirm('Ré-analyser cette image ?')" style="background: #007bff; color: white; border: none; border-radius: 3px; padding: 5px; cursor: pointer; font-size: 12px;">↻</button>
-        </form>
-        <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post" style="display: inline;">
-          <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')" style="background: #dc3545; color: white; border: none; border-radius: 3px; padding: 5px; cursor: pointer; font-size: 12px;">&times;</button>
-        </form>
-      </div>
+    <div class="gallery-item {% if img[3]|trim|lower == 'pleine' %}pleine{% elif img[3]|trim|lower == 'vide' %}vide{% endif %}">
+      <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post">
+        <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')">&times;</button>
+      </form>
       <a href="{{ url_for('image_detail', image_id=img[0]) }}">
         <img src="{{ url_for('static', filename='uploads/' + img[1]) }}" width="150">
       </a>
