@@ -15,7 +15,7 @@
   <div class="center">
     <h1>Valider la position de la poubelle</h1>
     <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
-    <form method="post">
+    <form method="post" onsubmit="return checkLocationSelected();">
       <div id="map"></div>
       <input type="hidden" name="latitude" id="latitude">
       <input type="hidden" name="longitude" id="longitude">
@@ -40,6 +40,15 @@
             marker = L.marker(e.latlng).addTo(map);
         }
     });
+    function checkLocationSelected() {
+      const lat = document.getElementById('latitude').value;
+      const lng = document.getElementById('longitude').value;
+      if (!lat || !lng) {
+        alert('Veuillez sélectionner la position de la poubelle sur la carte avant de valider.');
+        return false;
+      }
+      return true;
+    }
   </script>
 </body>
 </html>

@@ -39,8 +39,7 @@ def init_db():
             histogram_luminance TEXT,
             bin_edges INTEGER,
             bin_area INTEGER,
-            file_hash TEXT UNIQUE
-            bin_area INTEGER,
+            file_hash TEXT UNIQUE,
             latitude REAL,
             longitude REAL
         )
@@ -129,8 +128,8 @@ def upload_image():
         
         if processed_files or reanalyzed:
             if len(processed_files) == 1 and not reanalyzed and not duplicates and not errors:
-                # Une seule nouvelle image traitée sans complications, rediriger vers la page d'annotation
-                return redirect(url_for('annotate', filename=processed_files[0]))
+                # Une seule nouvelle image traitée sans complications, rediriger vers la page de validation de localisation
+                return redirect(url_for('validate_location', filename=processed_files[0]))
             else:
                 # Plusieurs images ou ré-analyses, rediriger vers la galerie avec un message détaillé
                 return redirect(url_for('images', 
@@ -186,10 +185,8 @@ def process_single_file(file, reanalyze=False):
             # Ré-analyser le doublon : utiliser le fichier existant et mettre à jour la base
             existing_filename = duplicate_info['filename']
             existing_path = os.path.join(app.config['UPLOAD_FOLDER'], existing_filename)
-            
             # Supprimer le fichier temporaire (on utilise l'existant)
             os.remove(temp_path)
-            
             # Si le nouveau fichier a un contenu différent, remplacer l'ancien
             if duplicate_info['type'] == 'filename':  # Même nom mais contenu différent
                 # Remplacer le fichier existant par le nouveau
@@ -199,29 +196,18 @@ def process_single_file(file, reanalyze=False):
             else:
                 # Même contenu, garder le fichier existant
                 final_path = existing_path
-            
             # Ré-analyser avec les nouvelles métriques
             width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(final_path)
             avg_rgb = eval(avg_color)
-        file = request.files['image']
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(path)
-
-            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(path)
-
-            avg_rgb = eval(avg_color)
             auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
             file_hash = calculate_file_hash(final_path)
-            
             # Mettre à jour la base de données
             conn = sqlite3.connect('db.sqlite')
             c = conn.cursor()
-            c.execute("""UPDATE images SET 
-                upload_date = ?, width = ?, height = ?, filesize = ?, avg_color = ?, 
-                contrast = ?, edges = ?, histogram = ?, histogram_luminance = ?, 
-                annotation = ?, bin_edges = ?, bin_area = ?, file_hash = ?
+            c.execute("""UPDATE images SET \
+                upload_date = ?, width = ?, height = ?, filesize = ?, avg_color = ?, \
+                contrast = ?, edges = ?, histogram = ?, histogram_luminance = ?, \
+                annotation = ?, bin_edges = ?, bin_area = ?, file_hash = ?\
                 WHERE id = ?""",
                 (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                  width, height, filesize, avg_color, contrast, edge_count, histogram, 
@@ -229,7 +215,6 @@ def process_single_file(file, reanalyze=False):
                  file_hash, duplicate_info['id']))
             conn.commit()
             conn.close()
-            
             return {
                 'success': True,
                 'filename': existing_filename,
@@ -237,47 +222,38 @@ def process_single_file(file, reanalyze=False):
                 'type': 'reanalyzed',
                 'original_id': duplicate_info['id']
             }
-        
         # Si pas de doublon, traitement normal
         final_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
         # Éviter les conflits de noms dans le système de fichiers
         if os.path.exists(final_path):
             name, ext = os.path.splitext(filename)
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             filename = f"{name}_{timestamp}{ext}"
             final_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        
         os.rename(temp_path, final_path)
-        
         # Extraction des caractéristiques
         width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(final_path)
-
         # Classification automatique
         avg_rgb = eval(avg_color)  # Convertir la string en tuple
         auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
-
         # Calculer le hash pour la base de données
         file_hash = calculate_file_hash(final_path)
-
         # Insertion en base de données
         conn = sqlite3.connect('db.sqlite')
         c = conn.cursor()
-        c.execute("""INSERT INTO images 
-            (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area, file_hash, latitude, longitude) 
+        c.execute("""INSERT INTO images \
+            (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area, file_hash, latitude, longitude) \
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)""",
             (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
              width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area, file_hash))
         conn.commit()
         conn.close()
-
         return {
             'success': True,
             'filename': filename,
             'message': f"Image {filename} analysée avec succès",
             'type': 'success'
         }
-        
     except Exception as e:
         # Nettoyer en cas d'erreur
         if os.path.exists(temp_path):
@@ -288,10 +264,6 @@ def process_single_file(file, reanalyze=False):
             'type': 'error',
             'original_filename': filename
         }
-
-        return redirect(url_for('validate_location', filename=filename))
-    return render_template('upload.html')
-
 
 @app.route('/validate_location/<filename>', methods=['GET', 'POST'])
 def validate_location(filename):
@@ -854,7 +826,7 @@ def is_duplicate_file(file_path, filename):
             'id': name_duplicate[0],
             'filename': name_duplicate[1],
             'upload_date': name_duplicate[2],
-            'annotation': name_duplicate[3],
+            'annotation': hash_duplicate[3],
             'message': f"Fichier avec le même nom déjà analysé: {name_duplicate[1]}"
         }
     
