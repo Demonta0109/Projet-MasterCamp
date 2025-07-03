@@ -590,6 +590,7 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
 
 @app.route('/images')
 def images():
+    message = request.args.get('message')
     filtre = request.args.get('filtre')
     conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
