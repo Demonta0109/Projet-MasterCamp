@@ -13,9 +13,22 @@
             border-radius: 12px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.07);
             padding: 20px;
-            width: 90vw;
+            width: calc(100% - 40px);
             max-width: 1200px;
             height: 400px;
+        }
+        .chart-section {
+            margin-bottom: 30px;
+        }
+        .no-data-message {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            margin: 20px 0;
+            padding: 40px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
         }
         .dashboard-container {
             max-width: 1100px;
@@ -92,8 +105,16 @@
       <img src="data:image/png;base64,{{ pie_chart }}" alt="Pie Chart">
       <img src="data:image/png;base64,{{ hist_chart }}" alt="Histogram">
     </div>
-    <h2>Évolution des uploads par date</h2>
-    <canvas id="lineChart" width="1200" height="400"></canvas>
+    <div class="chart-section">
+      <h2>Évolution des uploads par date</h2>
+      {% if dates and dates|length > 0 %}
+        <canvas id="lineChart" width="1200" height="400"></canvas>
+      {% else %}
+        <div class="no-data-message">
+          Aucune donnée disponible pour afficher l'évolution des uploads par date
+        </div>
+      {% endif %}
+    </div>
     <h2>Carte des localisations des poubelles</h2>
     <div id="map" style="height: 500px; margin-bottom: 30px; border-radius: 12px;"></div>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -123,6 +144,9 @@
       })();
       // Graphe des dates
       (function() {
+        const chartElement = document.getElementById('lineChart');
+        if (!chartElement) return; // Pas de canvas, pas de graphique
+        
         const dateCounts = {};
         dates.forEach(date => {
           if (typeof date === 'string' && date.length === 10) {
@@ -131,8 +155,9 @@
         });
         const labels = Object.keys(dateCounts).sort();
         const data = labels.map(date => dateCounts[date]);
+        
         if (labels.length > 0) {
-          new Chart(document.getElementById('lineChart'), {
+          new Chart(chartElement, {
             type: 'line',
             data: {
               labels: labels,

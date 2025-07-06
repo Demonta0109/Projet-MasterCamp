@@ -841,7 +841,18 @@ def dashboard():
     labels = ['Pleine', 'Vide']
     values = [full_count, empty_count]
     fig, ax = plt.subplots()
-    ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
+    
+    # Vérifier si on a des données pour le pie chart
+    if total_images > 0 and (full_count > 0 or empty_count > 0):
+        ax.pie(values, labels=labels, autopct='%1.1f%%', startangle=90)
+    else:
+        # Si aucune donnée, afficher un message
+        ax.text(0.5, 0.5, 'Aucune donnée\ndisponible', 
+                horizontalalignment='center', verticalalignment='center',
+                transform=ax.transAxes, fontsize=12)
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+    
     ax.axis('equal')
     pie_buf = BytesIO()
     plt.savefig(pie_buf, format='png')
@@ -851,10 +862,22 @@ def dashboard():
 
     # Histogram taille des fichiers
     fig, ax = plt.subplots()
-    ax.hist(sizes, bins=10, color='skyblue')
-    ax.set_title('Distribution des tailles de fichiers (Ko)')
-    ax.set_xlabel('Taille (Ko)')
-    ax.set_ylabel('Fréquence')
+    
+    # Vérifier si on a des données pour l'histogramme
+    if sizes and len(sizes) > 0:
+        ax.hist(sizes, bins=10, color='skyblue')
+        ax.set_title('Distribution des tailles de fichiers (Ko)')
+        ax.set_xlabel('Taille (Ko)')
+        ax.set_ylabel('Fréquence')
+    else:
+        # Si aucune donnée, afficher un message
+        ax.text(0.5, 0.5, 'Aucune donnée\ndisponible', 
+                horizontalalignment='center', verticalalignment='center',
+                transform=ax.transAxes, fontsize=12)
+        ax.set_title('Distribution des tailles de fichiers (Ko)')
+        ax.set_xlabel('Taille (Ko)')
+        ax.set_ylabel('Fréquence')
+    
     hist_buf = BytesIO()
     plt.savefig(hist_buf, format='png')
     hist_buf.seek(0)
@@ -868,7 +891,7 @@ def dashboard():
                            pie_chart=pie_png,
                            hist_chart=hist_png,
                            dates=dates,
-                           bins=[{'lat': row[0], 'lng': row[1], 'annotation': row[2], 'filename': row[3]} for row in bins] if 'bins' in locals() else [])
+                           bins=[{'lat': row[0], 'lng': row[1], 'annotation': row[2], 'filename': row[3]} for row in bins])
 
 
 @app.route('/bin_map')
