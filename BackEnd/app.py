@@ -39,6 +39,7 @@ def init_db():
             histogram_luminance TEXT,
             bin_edges INTEGER,
             bin_area INTEGER,
+            patch_diversity REAL,
             file_hash TEXT UNIQUE,
             latitude REAL,
             longitude REAL
@@ -197,9 +198,9 @@ def process_single_file(file, reanalyze=False):
                 # Même contenu, garder le fichier existant
                 final_path = existing_path
             # Ré-analyser avec les nouvelles métriques
-            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(final_path)
+            width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area, patch_diversity = extract_features(final_path)
             avg_rgb = eval(avg_color)
-            auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
+            auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area, patch_diversity)
             file_hash = calculate_file_hash(final_path)
             # Mettre à jour la base de données
             conn = sqlite3.connect('db.sqlite')
@@ -207,12 +208,12 @@ def process_single_file(file, reanalyze=False):
             c.execute("""UPDATE images SET \
                 upload_date = ?, width = ?, height = ?, filesize = ?, avg_color = ?, \
                 contrast = ?, edges = ?, histogram = ?, histogram_luminance = ?, \
-                annotation = ?, bin_edges = ?, bin_area = ?, file_hash = ?\
+                annotation = ?, bin_edges = ?, bin_area = ?, patch_diversity = ?, file_hash = ?\
                 WHERE id = ?""",
                 (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                  width, height, filesize, avg_color, contrast, edge_count, histogram, 
                  histogram_luminance, auto_classification, bin_edge_count, bin_area, 
-                 file_hash, duplicate_info['id']))
+                 patch_diversity, file_hash, duplicate_info['id']))
             conn.commit()
             conn.close()
             return {
@@ -232,20 +233,20 @@ def process_single_file(file, reanalyze=False):
             final_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         os.rename(temp_path, final_path)
         # Extraction des caractéristiques
-        width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(final_path)
+        width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area, patch_diversity = extract_features(final_path)
         # Classification automatique
         avg_rgb = eval(avg_color)  # Convertir la string en tuple
-        auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
+        auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area, patch_diversity)
         # Calculer le hash pour la base de données
         file_hash = calculate_file_hash(final_path)
         # Insertion en base de données
         conn = sqlite3.connect('db.sqlite')
         c = conn.cursor()
         c.execute("""INSERT INTO images \
-            (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area, file_hash, latitude, longitude) \
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)""",
+            (filename, upload_date, width, height, filesize, avg_color, contrast, edges, histogram, histogram_luminance, annotation, bin_edges, bin_area, patch_diversity, file_hash, latitude, longitude) \
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)""",
             (filename, datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-             width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area, file_hash))
+             width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, auto_classification, bin_edge_count, bin_area, patch_diversity, file_hash))
         conn.commit()
         conn.close()
         return {
@@ -298,7 +299,8 @@ def annotate(filename):
                 int(request.form['height']),
                 request.form['hist_luminance'],
                 int(request.form.get('bin_edge_count', 0)),  # Nouveau paramètre
-                int(request.form.get('bin_area', 1))  # Nouveau paramètre avec valeur par défaut pour éviter division par zéro
+                int(request.form.get('bin_area', 1)),  # Nouveau paramètre avec valeur par défaut pour éviter division par zéro
+                float(request.form.get('patch_diversity', 0.0))  # Nouveau paramètre pour la diversité des patchs
             )
             # Mettre à jour l'annotation dans la base de données
             conn = sqlite3.connect('db.sqlite')
@@ -369,6 +371,9 @@ def extract_features(image_path):
     # Détection de la région de la benne et calcul des contours dans cette région
     bin_region_edges, bin_edge_count, bin_region_area = detect_bin_region_and_edges(img_array, gray)
 
+    # Analyse de patchs et diversité de teintes
+    patch_diversity = analyze_patch_color_diversity(img_array)
+
     # Histogrammes des couleurs RGB
     hist_r = cv2.calcHist([img_array], [0], None, [256], [0, 256]).flatten()
     hist_g = cv2.calcHist([img_array], [1], None, [256], [0, 256]).flatten()
@@ -379,7 +384,178 @@ def extract_features(image_path):
     hist_luminance = cv2.calcHist([gray], [0], None, [256], [0, 256]).flatten()
     hist_luminance_str = ','.join([f'{int(v)}' for v in hist_luminance])
 
-    return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str, bin_edge_count, bin_region_area
+    return width, height, filesize_kb, str(avg_rgb), contrast, edge_count, hist_rgb_str, hist_luminance_str, bin_edge_count, bin_region_area, patch_diversity
+
+def analyze_patch_color_diversity(img_array):
+    """
+    Analyse la diversité de couleurs dans différents patchs de l'image
+    UNIQUEMENT dans les mêmes zones que celles utilisées par detect_bin_region_and_edges
+    
+    Une poubelle pleine aura généralement plus de diversité de couleurs (déchets variés)
+    qu'une poubelle vide (couleur uniforme du fond/intérieur de la poubelle)
+    
+    Args:
+        img_array: Image numpy array en RGB
+    
+    Returns:
+        float: Score de diversité de couleurs (0-1, plus élevé = plus diverse)
+    """
+    height, width, _ = img_array.shape
+    gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    
+    # Utiliser la même logique de détection de région que detect_bin_region_and_edges
+    # Définir la région d'intérêt : partie basse de l'image (éviter les arbres/ciel)
+    roi_top = int(height * 0.55)
+    roi_bottom = height
+    roi_left = 0
+    roi_right = width
+    
+    # Extraire la région d'intérêt pour l'analyse
+    gray_roi = gray[roi_top:roi_bottom, roi_left:roi_right]
+    img_roi = img_array[roi_top:roi_bottom, roi_left:roi_right]
+    
+    # Stratégie 1: Essayer de détecter la région de la benne comme dans detect_bin_region_and_edges
+    edges_strong = cv2.Canny(gray_roi, 50, 150)
+    contours, _ = cv2.findContours(edges_strong, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    target_region = None
+    
+    # Ajuster les coordonnées des contours pour correspondre à l'image complète
+    if contours:
+        adjusted_contours = []
+        for contour in contours:
+            adjusted_contour = contour.copy()
+            adjusted_contour[:, :, 1] += roi_top  # Ajouter l'offset vertical
+            adjusted_contours.append(adjusted_contour)
+        
+        if adjusted_contours:
+            largest_contour = max(adjusted_contours, key=cv2.contourArea)
+            area = cv2.contourArea(largest_contour)
+            
+            # Si le contour est assez grand (au moins 8% de la région d'intérêt), l'utiliser
+            roi_area = (roi_bottom - roi_top) * (roi_right - roi_left)
+            if area > (roi_area * 0.08):
+                # Créer un masque pour la région de la benne
+                mask = np.zeros(gray.shape, dtype=np.uint8)
+                cv2.fillPoly(mask, [largest_contour], 255)
+                
+                # Extraire la région masquée pour l'analyse de diversité
+                target_region = extract_masked_region(img_array, mask)
+    
+    # Stratégie 2: Si pas de contour détecté, utiliser la région centrale-basse
+    if target_region is None:
+        center_margin_x = 0.12
+        bottom_margin_y = 0.07
+        top_margin_y = 0.55
+        
+        x_start = int(width * center_margin_x)
+        x_end = int(width * (1 - center_margin_x))
+        y_start = int(height * top_margin_y)
+        y_end = int(height * (1 - bottom_margin_y))
+        
+        target_region = img_array[y_start:y_end, x_start:x_end]
+    
+    # Analyser la diversité de couleurs dans la région ciblée
+    return analyze_region_patch_diversity(target_region)
+
+def extract_masked_region(img_array, mask):
+    """
+    Extrait la région de l'image correspondant au masque et la convertit en rectangle
+    pour l'analyse de patchs
+    """
+    # Trouver les coordonnées de la bounding box du masque
+    coords = np.column_stack(np.where(mask > 0))
+    if len(coords) == 0:
+        return None
+    
+    y_min, x_min = coords.min(axis=0)
+    y_max, x_max = coords.max(axis=0)
+    
+    # Extraire la région rectangulaire englobante
+    return img_array[y_min:y_max+1, x_min:x_max+1]
+
+def analyze_region_patch_diversity(region_array):
+    """
+    Analyse la diversité de couleurs par patchs dans une région spécifique
+    
+    Args:
+        region_array: Région d'image numpy array en RGB
+    
+    Returns:
+        float: Score de diversité de couleurs (0-1, plus élevé = plus diverse)
+    """
+    if region_array is None or region_array.size == 0:
+        return 0.0
+    
+    height, width = region_array.shape[:2]
+    
+    # Adapter la taille des patchs à la région
+    patch_size = min(32, width // 3, height // 3)  # Patchs plus petits pour les régions focalisées
+    if patch_size < 8:  # Région trop petite
+        # Analyser la région entière comme un seul "patch"
+        return calculate_patch_color_diversity(region_array)
+    
+    diversities = []
+    
+    # Parcourir la région par patchs avec chevauchement
+    step_size = max(patch_size // 2, 4)  # Au moins 4 pixels de step
+    
+    for y in range(0, height - patch_size + 1, step_size):
+        for x in range(0, width - patch_size + 1, step_size):
+            # Extraire le patch
+            patch = region_array[y:y+patch_size, x:x+patch_size]
+            
+            # Calculer la diversité de couleurs dans ce patch
+            patch_diversity = calculate_patch_color_diversity(patch)
+            diversities.append(patch_diversity)
+    
+    # Retourner la diversité moyenne de tous les patchs
+    return np.mean(diversities) if diversities else 0.0
+
+def calculate_patch_color_diversity(patch):
+    """
+    Calcule la diversité de couleurs dans un patch donné
+    
+    Args:
+        patch: Patch d'image numpy array en RGB
+    
+    Returns:
+        float: Score de diversité (0-1)
+    """
+    # Méthode 1: Variance des couleurs HSV (teinte, saturation, valeur)
+    patch_hsv = cv2.cvtColor(patch, cv2.COLOR_RGB2HSV)
+    
+    # Calculer la variance de la teinte (Hue) - indicateur clé de diversité
+    hue_variance = np.var(patch_hsv[:, :, 0])
+    
+    # Calculer la variance de la saturation
+    saturation_variance = np.var(patch_hsv[:, :, 1])
+    
+    # Calculer la variance de la valeur (luminosité)
+    value_variance = np.var(patch_hsv[:, :, 2])
+    
+    # Normaliser les variances (les valeurs HSV vont de 0 à 179 pour H, 0 à 255 pour S et V)
+    hue_diversity = min(hue_variance / (90.0 ** 2), 1.0)  # Normalisation pour teinte
+    saturation_diversity = min(saturation_variance / (128.0 ** 2), 1.0)  # Normalisation pour saturation
+    value_diversity = min(value_variance / (128.0 ** 2), 1.0)  # Normalisation pour valeur
+    
+    # Méthode 2: Nombre de couleurs distinctes (quantifiées)
+    # Quantifier les couleurs pour réduire le bruit
+    patch_quantized = patch // 32 * 32  # Réduire à 8 niveaux par canal
+    unique_colors = len(np.unique(patch_quantized.reshape(-1, 3), axis=0))
+    max_possible_colors = min(64, patch.shape[0] * patch.shape[1])  # Maximum théorique raisonnable
+    color_count_diversity = unique_colors / max_possible_colors
+    
+    # Combiner les métriques avec pondération
+    # La teinte est le plus important pour la diversité visuelle
+    diversity_score = (
+        0.4 * hue_diversity +           # Teinte (plus important)
+        0.25 * saturation_diversity +   # Saturation
+        0.15 * value_diversity +        # Luminosité
+        0.2 * color_count_diversity     # Nombre de couleurs distinctes
+    )
+    
+    return min(diversity_score, 1.0)
 
 def detect_bin_region_and_edges(img_array, gray):
     """
@@ -459,7 +635,7 @@ def detect_bin_region_and_edges(img_array, gray):
     
     return bin_region_edges, bin_edge_count, bin_region_area
 
-def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_luminance_str=None, bin_edge_count=None, bin_area=None):
+def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_luminance_str=None, bin_edge_count=None, bin_area=None, patch_diversity=None):
     """
     Algorithme de classification automatique amélioré pour déterminer si une poubelle est vide ou pleine
     
@@ -467,6 +643,7 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     - Correction de la logique de luminosité
     - Ajout de l'analyse de la distribution de luminance
     - Utilisation des contours spécifiques à la région de la benne
+    - Ajout de l'analyse de diversité de couleurs par patchs
     - Pondération des critères
     - Seuils adaptatifs selon la taille de l'image
     """
@@ -476,6 +653,8 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
     EDGE_DENSITY_BASE_THRESHOLD = 0.9   # Seuil de base pour la densité des contours - OPTIMISÉ
     BIN_EDGE_DENSITY_THRESHOLD = 0.12    # Seuil pour les contours dans la benne - OPTIMISÉ
     CONTRAST_THRESHOLD = 245  # Seuil de contraste (abaissé pour plus de sensibilité)
+    PATCH_DIVERSITY_THRESHOLD = 0.1  # Seuil pour la diversité de couleurs par patchs - NOUVEAU
+    PATCH_DIVERSITY_WEIGHT = 2  # Poids pour le critère de diversité de patchs - NOUVEAU
     
     # Calculer la luminosité moyenne (moyenne pondérée RGB)
     r, g, b = avg_rgb
@@ -542,7 +721,19 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
         criteria_scores['bin_edges'] = 'N/A (utilise edges)'
     total_weight += edge_weight
 
-    # Critère 3: Non-uniformité de la luminance (poids: 1.0)
+    # Critère 3: Diversité de couleurs par patchs (poids: 2.5) - NOUVEAU
+    diversity_weight = PATCH_DIVERSITY_WEIGHT
+    if patch_diversity is not None:
+        if patch_diversity > PATCH_DIVERSITY_THRESHOLD:
+            criteria_scores['patch_diversity'] = 1.0
+            weighted_score += diversity_weight
+        else:
+            criteria_scores['patch_diversity'] = 0.0
+        total_weight += diversity_weight
+    else:
+        criteria_scores['patch_diversity'] = 'N/A (non calculé)'
+
+    # Critère 4: Non-uniformité de la luminance (poids: 1.0)
     uniformity_weight = 1.0
     uniformity_threshold = 0.5
     if luminance_uniformity > uniformity_threshold:  # Plus de variation = plus plein
@@ -576,6 +767,8 @@ def classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, hist_lu
         'bin_edge_threshold': round(adjusted_bin_edge_threshold, 4) if bin_edge_count is not None else 'N/A',
         'bin_edge_count': bin_edge_count if bin_edge_count is not None else 'N/A',
         'bin_area': bin_area if bin_area is not None else 'N/A',
+        'patch_diversity': round(patch_diversity, 4) if patch_diversity is not None else 'N/A',
+        'patch_diversity_threshold': PATCH_DIVERSITY_THRESHOLD,
         'contrast': round(contrast, 2),
         'contrast_threshold': CONTRAST_THRESHOLD,
         'luminance_uniformity': round(luminance_uniformity, 3),
@@ -852,9 +1045,9 @@ def reanalyze_image(image_id):
             return redirect(url_for('images', message=f"Fichier {filename} non trouvé sur le disque"))
         
         # Ré-analyser l'image
-        width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area = extract_features(image_path)
+        width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area, patch_diversity = extract_features(image_path)
         avg_rgb = eval(avg_color)
-        auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area)
+        auto_classification, debug_info = classify_bin_automatic(avg_rgb, edge_count, contrast, width, height, histogram_luminance, bin_edge_count, bin_area, patch_diversity)
         file_hash = calculate_file_hash(image_path)
         
         # Mettre à jour la base de données
@@ -863,12 +1056,12 @@ def reanalyze_image(image_id):
         c.execute("""UPDATE images SET 
             upload_date = ?, width = ?, height = ?, filesize = ?, avg_color = ?, 
             contrast = ?, edges = ?, histogram = ?, histogram_luminance = ?, 
-            annotation = ?, bin_edges = ?, bin_area = ?, file_hash = ?
+            annotation = ?, bin_edges = ?, bin_area = ?, patch_diversity = ?, file_hash = ?
             WHERE id = ?""",
             (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
              width, height, filesize, avg_color, contrast, edge_count, histogram, 
              histogram_luminance, auto_classification, bin_edge_count, bin_area, 
-             file_hash, image_id))
+             patch_diversity, file_hash, image_id))
         conn.commit()
         conn.close()
         
