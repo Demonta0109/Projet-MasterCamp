@@ -1,16 +1,25 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Détail de l’image</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Chargement de la feuille de style localement -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" media="all">
+  
 </head>
 <body>
   <header>
     <h1>Détail de l’image</h1>
   </header>
   <main>
-    <img src="{{ url_for('static', filename='uploads/' + image[1]) }}" width="500"><br><br>
+    <img 
+      src="{{ url_for('static', filename='uploads/' + image[1]) }}" 
+      alt="Image nommée {{ image[1] }}" 
+      width="500" 
+      loading="lazy"
+    >
+
     <ul>
       <li><strong>Fichier :</strong> {{ image[1] }}</li>
       <li><strong>Date :</strong> {{ image[2] }}</li>
@@ -21,10 +30,13 @@
       <li><strong>Contraste :</strong> {{ image[8] }}</li>
       <li><strong>Contours :</strong> {{ image[9] }}</li>
     </ul>
-    <a href="{{ url_for('images') }}">← Retour à la galerie</a>
-    <form action="{{ url_for('delete_image', image_id=image[0]) }}" method="post" style="display:inline;">
-      <button type="submit" onclick="return confirm('Supprimer cette image ?')">Supprimer</button>
-    </form>
+
+    <nav>
+      <a href="{{ url_for('images') }}">← Retour à la galerie</a>
+      <form action="{{ url_for('delete_image', image_id=image[0]) }}" method="post" style="display:inline;">
+        <button type="submit" onclick="return confirm('Supprimer cette image ?')">Supprimer</button>
+      </form>
+    </nav>
   </main>
 </body>
 </html>

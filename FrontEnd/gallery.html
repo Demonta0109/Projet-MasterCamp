@@ -1,48 +1,56 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Galerie des images</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" media="all">
+  
 </head>
 <body>
   <header>
     <h1>Galerie d'images</h1>
   </header>
-<main>
-  <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
-  {% if message %}
-  <div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
-    <strong>✅ {{ message }}</strong>
-  </div>
-  {% endif %}
-  
-  <form method="get" action="{{ url_for('images') }}" style="margin-bottom: 1.5rem; text-align:center;">
-    <label>
-      <input type="radio" name="filtre" value="" {% if not request.args.get('filtre') %}checked{% endif %}> Tous
-    </label>
-    <label style="margin-left:1em;">
-      <input type="radio" name="filtre" value="pleine" {% if request.args.get('filtre') == 'pleine' %}checked{% endif %}> Pleine
-    </label>
-    <label style="margin-left:1em;">
-      <input type="radio" name="filtre" value="vide" {% if request.args.get('filtre') == 'vide' %}checked{% endif %}> Vide
-    </label>
-    <button type="submit" style="margin-left:1em;">Filtrer</button>
-</form>
-  <div class="gallery-grid">
-    {% for img in images %}
-    <div class="gallery-item {% if img[3]|trim|lower == 'pleine' %}pleine{% elif img[3]|trim|lower == 'vide' %}vide{% endif %}">
-      <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post">
-        <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')">&times;</button>
-      </form>
-      <a href="{{ url_for('image_detail', image_id=img[0]) }}">
-        <img src="{{ url_for('static', filename='uploads/' + img[1]) }}" width="150">
-      </a>
+
+  <main>
+    <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
+
+    {% if message %}
+      <div class="success-message">
+        <strong>✅ {{ message }}</strong>
+      </div>
+    {% endif %}
+
+    <form method="get" action="{{ url_for('images') }}">
+      <label>
+        <input type="radio" name="filtre" value="" {% if not request.args.get('filtre') %}checked{% endif %}> Tous
+      </label>
+      <label style="margin-left:1em;">
+        <input type="radio" name="filtre" value="pleine" {% if request.args.get('filtre') == 'pleine' %}checked{% endif %}> Pleine
+      </label>
+      <label style="margin-left:1em;">
+        <input type="radio" name="filtre" value="vide" {% if request.args.get('filtre') == 'vide' %}checked{% endif %}> Vide
+      </label>
+      <button type="submit" style="margin-left:1em;">Filtrer</button>
+    </form>
+
+    <div class="gallery-grid">
+      {% for img in images %}
+        <div class="gallery-item {{ img[3]|trim|lower }}">
+          <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post">
+            <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')">&times;</button>
+          </form>
+          <a href="{{ url_for('image_detail', image_id=img[0]) }}">
+            <img 
+              src="{{ url_for('static', filename='uploads/' + img[1]) }}" 
+              alt="Image {{ img[1] }}" 
+              width="150"
+              loading="lazy"
+            >
+          </a>
+        </div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-  <br>
-</main>
+  </main>
 </body>
 </html>
-

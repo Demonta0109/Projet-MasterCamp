@@ -45,6 +45,10 @@ def init_db():
             longitude REAL
         )
     ''')
+    # Ajout d'index pour accélérer les requêtes de filtrage/recherche
+    c.execute('CREATE INDEX IF NOT EXISTS idx_annotation ON images(annotation)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_file_hash ON images(file_hash)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_filename ON images(filename)')
     conn.commit()
     conn.close()
 

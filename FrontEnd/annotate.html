@@ -4,368 +4,155 @@
   <meta charset="UTF-8">
   <title>Annoter</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preload" href="{{ url_for('static', filename='style.css') }}" as="style">
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-  <header>
-    <h1>Annoter l'image</h1>
-    <nav>
-      <a href="{{ url_for('dashboard') }}">Voir le tableau de bord</a>
-    </nav>
-  </header>
+<header>
+  <h1>Annoter l'image</h1>
+  <nav>
+    <a href="{{ url_for('dashboard') }}">Voir le tableau de bord</a>
+  </nav>
+</header>
 
-  <main>
-    <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
-    
-    <!-- Affichage de la classification automatique -->
-    {% if image[3] %}
-    {% if image[3] == 'pleine' %}
-    <div style="background: linear-gradient(135deg, #c62828, #d32f2f); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); border-left: 5px solid #b71c1c;">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <div>
-          <strong style="font-size: 16px;">Classification automatique : 
-            <span style="background-color: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: bold;">
-              {{ image[3].upper() }}
-            </span>
-          </strong>
-          <br>
-          <small style="opacity: 0.9; margin-top: 5px; display: block;">Vous pouvez modifier cette classification ci-dessous si nécessaire.</small>
-        </div>
-      </div>
-    </div>
-    {% else %}
-    <div style="background: linear-gradient(135deg, #2e7d32, #388e3c); color: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); border-left: 5px solid #1b5e20;">
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <div>
-          <strong style="font-size: 16px;">Classification automatique : 
-            <span style="background-color: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: bold;">
-              {{ image[3].upper() }}
-            </span>
-          </strong>
-          <br>
-          <small style="opacity: 0.9; margin-top: 5px; display: block;">Vous pouvez modifier cette classification ci-dessous si nécessaire.</small>
-        </div>
-      </div>
-    </div>
-    {% endif %}
-    {% endif %}
-    
-    <form method="post">
-      <input type="hidden" name="avg_color" value="{{ image[7] }}">
-      <input type="hidden" name="edge_count" value="{{ image[9] }}">
-      <input type="hidden" name="contrast" value="{{ image[8] }}">
-      <input type="hidden" name="width" value="{{ image[4] }}">
-      <input type="hidden" name="height" value="{{ image[5] }}">
-      <input type="hidden" name="hist_luminance" value="{{ image[11] }}">
-      <input type="hidden" name="bin_edge_count" value="{{ image[12] or 0 }}">
-      <input type="hidden" name="bin_area" value="{{ image[13] or 1 }}">
-    <form method="post" class="main-form">
-      <button type="submit" name="annotation" value="pleine">Pleine</button>
-      <button type="submit" name="annotation" value="vide">Vide</button>
-      <button type="submit" name="annotation" value="Adeterminer">A determiner par l'IA</button>
-    </form>
+<main>
+  <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300" loading="lazy" alt="Image à annoter"><br><br>
 
-    <h2>Métadonnées</h2>
-    <ul>
-      <li>Taille fichier : {{ image[6] }} octets</li>
-      <li>Dimensions : {{ image[4] }} x {{ image[5] }} px</li>
-      <li>Couleur moyenne : {{ image[7] }}
-      <span id="avg-color-box" style="display:inline-block;width:20px;height:20px;border:1px solid #000;vertical-align:middle;"></span>
+  {% if image[3] %}
+  <div class="notification {{ image[3] }}">
+    <strong>Classification automatique :
+      <span style="background-color: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: bold;">
+        {{ image[3].upper() }}
+      </span>
+    </strong>
+    <br>
+    <small style="opacity: 0.9;">Vous pouvez modifier cette classification ci-dessous si nécessaire.</small>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    {% set fields = {
+      'avg_color': image[7],
+      'edge_count': image[9],
+      'contrast': image[8],
+      'width': image[4],
+      'height': image[5],
+      'hist_luminance': image[11],
+      'bin_edge_count': image[12] or 0,
+      'bin_area': image[13] or 1
+    } %}
+    {% for key, val in fields.items() %}
+      <input type="hidden" name="{{ key }}" value="{{ val }}">
+    {% endfor %}
+
+    <button type="submit" name="annotation" value="pleine">Pleine</button>
+    <button type="submit" name="annotation" value="vide">Vide</button>
+    <button type="submit" name="annotation" value="Adeterminer">À déterminer par l'IA</button>
+  </form>
+
+  <h2>Métadonnées</h2>
+  <ul>
+    <li>Taille fichier : {{ image[6] }} octets</li>
+    <li>Dimensions : {{ image[4] }} x {{ image[5] }} px</li>
+    <li>Couleur moyenne : {{ image[7] }}
+      <span class="avg-color-box" id="avg-color-box"></span>
     </li>
-    <script>
-      // Récupère la couleur moyenne depuis le texte (ex: "(123, 45, 67)")
-      const avgColorText = `{{ image[7] }}`;
-      const match = avgColorText.match(/\((\d+),\s*(\d+),\s*(\d+)\)/);
-      if (match) {
-        const r = match[1], g = match[2], b = match[3];
-        document.getElementById('avg-color-box').style.backgroundColor = `rgb(${r},${g},${b})`;
-      }
-    </script>
-      <li>Contraste : {{ image[8] }}</li>
-      <li>Contours détectés : {{ image[9] }}</li>
-      {% if image[12] and image[13] %}
-      <li>Contours dans la benne : {{ image[12] }} (région de {{ image[13] }} pixels)</li>
-      <li>Densité benne : {{ "%.4f"|format(image[12] / image[13]) }}</li>
-      {% endif %}
-    </ul>
-
-    <!-- Section de debug de l'algorithme amélioré -->
-    {% if image[3] %}
-    <div style="background: linear-gradient(135deg, #2c3e50, #34495e); color: white; padding: 20px; border-radius: 12px; margin-top: 20px; box-shadow: 0 6px 12px rgba(0,0,0,0.15);">
-      <h4 style="margin-top: 0; color: white; display: flex; align-items: center;">
-        Algorithme de Classification Amélioré
-        {% if image[3] == 'pleine' %}
-        <span style="margin-left: 10px; padding: 4px 12px; background-color: #e74c3c; color: white; border-radius: 15px; font-size: 12px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-          {{ image[3].upper() }}
-        </span>
-        {% else %}
-        <span style="margin-left: 10px; padding: 4px 12px; background-color: #27ae60; color: white; border-radius: 15px; font-size: 12px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-          {{ image[3].upper() }}
-        </span>
-        {% endif %}
-      </h4>
-      
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px;">
-        <!-- Critères principaux -->
-        <div style="background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #3498db;">
-          <h5 style="margin: 0 0 10px 0; color: #3498db;">Critères d'Analyse</h5>
-          <div style="font-size: 13px; line-height: 1.5; color: #ecf0f1;">
-            <div style="margin-bottom: 6px;">
-              {% set rgb = (image[7]|replace('(', '')|replace(')', '')).split(',') %}
-              💡 <strong>Luminosité:</strong> {{ "%.1f"|format((rgb[0]|int * 0.299 + rgb[1]|int * 0.587 + rgb[2]|int * 0.114)) }} / 255
-              <small style="color: #bdc3c7;">(seuil: 135)</small>
-            </div>
-            <div style="margin-bottom: 6px;">
-              🔍 <strong>Contours (image):</strong> {{ "%.4f"|format(image[9] / (image[4] * image[5])) }}
-              <small style="color: #bdc3c7;">(seuil: 0.09)</small>
-            </div>
-            {% if image[12] and image[13] %}
-            <div style="margin-bottom: 6px;">
-              🎯 <strong>Contours (benne):</strong> {{ "%.4f"|format(image[12] / image[13]) }}
-              <small style="color: #bdc3c7;">(seuil: 0.12)</small>
-            </div>
-            {% endif %}
-            <div>
-              <strong>Uniformité:</strong> Variable
-              <small style="color: #bdc3c7;">(analyse histogramme)</small>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Améliorations -->
-        <div style="background-color: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #2ecc71;">
-          <h5 style="margin: 0 0 10px 0; color: #2ecc71;">Améliorations</h5>
-          <div style="font-size: 13px; line-height: 1.5; color: #ecf0f1;">
-            <div style="margin-bottom: 4px;">✅ Luminance perceptuelle (0.299R + 0.587G + 0.114B)</div>
-            <div style="margin-bottom: 4px;">✅ Seuils adaptatifs selon résolution</div>
-            <div style="margin-bottom: 4px;">✅ Pondération des critères</div>
-            <div style="margin-bottom: 4px;">✅ Analyse spécifique de la région de la benne</div>
-            <div style="margin-bottom: 4px;">✅ Analyse de distribution</div>
-            <div>✅ Score de confiance détaillé</div>
-          </div>
-        </div>
-      </div>
-      
-      <div style="margin-top: 20px; padding: 15px; background-color: rgba(0,0,0,0.2); border-radius: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
-          <div style="font-size: 14px; color: #ecf0f1;">
-            <strong>Score algorithmique:</strong> 
-            <span style="font-family: monospace; background-color: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 4px; color: #f39c12;">
-              Variable (0.0 - 1.0)
-            </span>
-          </div>
-          <div style="font-size: 14px; color: #ecf0f1;">
-            <strong>Confiance:</strong> 
-            {% if image[3] == 'pleine' %}
-            <span style="background-color: rgba(231,76,60,0.3); padding: 3px 10px; border-radius: 4px; color: #e74c3c; font-weight: bold;">
-              Calculée dynamiquement
-            </span>
-            {% else %}
-            <span style="background-color: rgba(39,174,96,0.3); padding: 3px 10px; border-radius: 4px; color: #27ae60; font-weight: bold;">
-              Calculée dynamiquement
-            </span>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-      
-      <details style="margin-top: 15px;">
-        <summary style="cursor: pointer; font-size: 13px; color: #bdc3c7; padding: 5px 0;">Instructions de personnalisation</summary>
-        <div style="margin-top: 10px; padding: 12px; background-color: rgba(241,196,15,0.1); border-radius: 6px; font-size: 12px; line-height: 1.4; color: #f1c40f; border-left: 3px solid #f39c12;">
-          <strong>Pour ajuster l'algorithme, modifiez dans app.py :</strong><br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">BRIGHTNESS_THRESHOLD</code> : seuil de luminosité (135)<br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">EDGE_DENSITY_BASE_THRESHOLD</code> : seuil de contours globaux (0.09)<br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">BIN_EDGE_DENSITY_THRESHOLD</code> : seuil de contours dans la benne (0.12)<br>
-          • <code style="background-color: rgba(0,0,0,0.3); padding: 1px 4px; border-radius: 2px;">classification_threshold</code> : seuil de décision (0.43)
-        </div>
-      </details>
-    </div>
+    <li>Contraste : {{ image[8] }}</li>
+    <li>Contours détectés : {{ image[9] }}</li>
+    {% if image[12] and image[13] %}
+    <li>Contours dans la benne : {{ image[12] }} ({{ image[13] }} px)</li>
+    <li>Densité benne : {{ "%.4f"|format(image[12] / image[13]) }}</li>
     {% endif %}
+  </ul>
 
-    <!-- Bouton voir plus -->
-    <button id="toggleHistograms" onclick="toggleHistogramSection()" style="margin-top: 20px; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-      Voir plus (Histogrammes)
-    </button>
+  {% if image[3] %}
+  <section aria-label="Analyse améliorée">
+    <!-- Rendu allégé + accessible -->
+    <details open>
+      <summary><strong>Algorithme de Classification Amélioré</strong></summary>
+      <p><strong>Luminosité :</strong>
+        {% set rgb = (image[7]|replace('(', '')|replace(')', '')).split(',') %}
+        {{ "%.1f"|format((rgb[0]|int * 0.299 + rgb[1]|int * 0.587 + rgb[2]|int * 0.114)) }} / 255
+      </p>
+      <p><strong>Contours (image) :</strong> {{ "%.4f"|format(image[9] / (image[4] * image[5])) }}</p>
+      {% if image[12] and image[13] %}
+      <p><strong>Contours (benne) :</strong> {{ "%.4f"|format(image[12] / image[13]) }}</p>
+      {% endif %}
+    </details>
+  </section>
+  {% endif %}
 
-    <!-- Section des histogrammes (cachée par défaut) -->
-    <div id="histogramSection" style="display: none; margin-top: 20px;">
-      <h3>Histogrammes</h3>
-      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 300px;">
-          <h4>Histogramme des couleurs (RGB)</h4>
-          <canvas id="colorHistogram" width="400" height="200"></canvas>
-        </div>
-        <div style="flex: 1; min-width: 300px;">
-          <h4>Histogramme de luminance</h4>
-          <canvas id="luminanceHistogram" width="400" height="200"></canvas>
-        </div>
-      </div>
+  <button id="toggleHistograms" onclick="toggleHistogramSection()">Voir plus (Histogrammes)</button>
+
+  <div id="histogramSection" style="display: none;">
+    <h3>Histogrammes</h3>
+    <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+      <canvas id="colorHistogram" width="400" height="200" loading="lazy"></canvas>
+      <canvas id="luminanceHistogram" width="400" height="200" loading="lazy"></canvas>
     </div>
+  </div>
 
-    <script>
-      let histogramVisible = false;
-      let chartsCreated = false;
+</main>
 
-      function toggleHistogramSection() {
-        const section = document.getElementById('histogramSection');
-        const button = document.getElementById('toggleHistograms');
-        
-        if (histogramVisible) {
-          section.style.display = 'none';
-          button.textContent = 'Voir plus (Histogrammes)';
-          histogramVisible = false;
-        } else {
-          section.style.display = 'block';
-          button.textContent = 'Voir moins';
-          histogramVisible = true;
-          
-          // Créer les graphiques seulement la première fois
-          if (!chartsCreated) {
-            createHistograms();
-            chartsCreated = true;
-          }
-        }
-      }
+<script>
+  // Mise à jour couleur moyenne
+  (function () {
+    const match = `{{ image[7] }}`.match(/\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (match) {
+      const [r, g, b] = match.slice(1);
+      document.getElementById('avg-color-box').style.backgroundColor = `rgb(${r},${g},${b})`;
+    }
+  })();
 
-      function createHistograms() {
-        // Données des histogrammes depuis le serveur
-        const histogramRGB = `{{ image[10] }}`.split(',').map(Number);
-        const histogramLuminance = `{{ image[11] }}`.split(',').map(Number);
-        
-        // Séparer les histogrammes RGB (256 valeurs pour chaque couleur)
-        const histR = histogramRGB.slice(0, 256);
-        const histG = histogramRGB.slice(256, 512);
-        const histB = histogramRGB.slice(512, 768);
-        
-        // Labels pour l'axe X (0-255)
-        const labels = Array.from({length: 256}, (_, i) => i);
+  function toggleHistogramSection() {
+    const section = document.getElementById('histogramSection');
+    section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    document.getElementById('toggleHistograms').textContent = section.style.display === 'none'
+      ? 'Voir plus (Histogrammes)'
+      : 'Voir moins';
+    if (!window.chartsCreated && section.style.display === 'block') {
+      createHistograms();
+      window.chartsCreated = true;
+    }
+  }
 
-        // Histogramme des couleurs RGB
-        const ctxColor = document.getElementById('colorHistogram').getContext('2d');
-        new Chart(ctxColor, {
-          type: 'line',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Rouge',
-              data: histR,
-              borderColor: 'rgb(255, 99, 132)',
-              backgroundColor: 'rgba(255, 99, 132, 0.1)',
-              fill: false,
-              tension: 0.1
-            }, {
-              label: 'Vert',
-              data: histG,
-              borderColor: 'rgb(75, 192, 192)',
-              backgroundColor: 'rgba(75, 192, 192, 0.1)',
-              fill: false,
-              tension: 0.1
-            }, {
-              label: 'Bleu',
-              data: histB,
-              borderColor: 'rgb(54, 162, 235)',
-              backgroundColor: 'rgba(54, 162, 235, 0.1)',
-              fill: false,
-              tension: 0.1
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                labels: {
-                  color: '#e0e0e0' // Couleur claire pour les légendes
-                }
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Intensité (0-255)',
-                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe X
-                },
-                ticks: {
-                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe X
-                },
-                grid: {
-                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
-                }
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Nombre de pixels',
-                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe Y
-                },
-                ticks: {
-                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe Y
-                },
-                grid: {
-                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
-                }
-              }
-            }
-          }
-        });
+  function createHistograms() {
+    const ctxColor = document.getElementById('colorHistogram').getContext('2d');
+    const ctxLuminance = document.getElementById('luminanceHistogram').getContext('2d');
+    const histRGB = `{{ image[10] }}`.split(',').map(Number);
+    const histLum = `{{ image[11] }}`.split(',').map(Number);
+    const labels = [...Array(256).keys()];
+    new Chart(ctxColor, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: ['Rouge', 'Vert', 'Bleu'].map((c, i) => ({
+          label: c,
+          data: histRGB.slice(i * 256, (i + 1) * 256),
+          borderColor: ['red', 'green', 'blue'][i],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.1
+        }))
+      },
+      options: { responsive: true }
+    });
 
-        // Histogramme de luminance
-        const ctxLuminance = document.getElementById('luminanceHistogram').getContext('2d');
-        new Chart(ctxLuminance, {
-          type: 'bar',
-          data: {
-            labels: labels,
-            datasets: [{
-              label: 'Luminance',
-              data: histogramLuminance,
-              backgroundColor: 'rgba(128, 128, 128, 0.7)',
-              borderColor: 'rgba(128, 128, 128, 1)',
-              borderWidth: 1
-            }]
-          },
-          options: {
-            responsive: true,
-            plugins: {
-              legend: {
-                labels: {
-                  color: '#e0e0e0' // Couleur claire pour les légendes
-                }
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Niveau de gris (0-255)',
-                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe X
-                },
-                ticks: {
-                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe X
-                },
-                grid: {
-                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
-                }
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Nombre de pixels',
-                  color: '#e0e0e0' // Couleur claire pour le titre de l'axe Y
-                },
-                ticks: {
-                  color: '#d0d0d0' // Couleur claire pour les valeurs de l'axe Y
-                },
-                grid: {
-                  color: 'rgba(255, 255, 255, 0.1)' // Grille plus discrète
-                }
-              }
-            }
-          }
-        });
-      }
-    </script>
-  </main>
+    new Chart(ctxLuminance, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Luminance',
+          data: histLum,
+          backgroundColor: '#888'
+        }]
+      },
+      options: { responsive: true }
+    });
+  }
+</script>
 
 </body>
 </html>

@@ -4,42 +4,53 @@
   <meta charset="UTF-8">
   <title>Valider la localisation</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    #map { height: 400px; margin-bottom: 20px; }
-    .center { text-align: center; }
-  </style>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
 </head>
 <body>
   <div class="center">
     <h1>Valider la position de la poubelle</h1>
-    <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300"><br><br>
+
+    <img 
+      src="{{ url_for('static', filename='uploads/' + filename) }}" 
+      width="300" 
+      loading="lazy" 
+      alt="Image de la poubelle à géolocaliser"><br>
+
     <form method="post" onsubmit="return checkLocationSelected();">
-      <div id="map"></div>
+      <div id="map" role="application" aria-label="Carte pour sélectionner la position de la poubelle"></div>
       <input type="hidden" name="latitude" id="latitude">
       <input type="hidden" name="longitude" id="longitude">
       <button type="submit">Valider la position</button>
     </form>
+
     <a href="{{ url_for('upload_image') }}">Annuler</a>
   </div>
+
+  <!-- Déplacement en bas pour éviter le blocage du rendu -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
   <script>
-    const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-    let marker;
-    map.on('click', function(e) {
-        const lat = e.latlng.lat;
-        const lng = e.latlng.lng;
-        document.getElementById('latitude').value = lat;
-        document.getElementById('longitude').value = lng;
+    // Attendre que Leaflet soit chargé
+    window.addEventListener('load', () => {
+      const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19
+      }).addTo(map);
+
+      let marker;
+      map.on('click', function(e) {
+        const { lat, lng } = e.latlng;
+        document.getElementById('latitude').value = lat.toFixed(6);
+        document.getElementById('longitude').value = lng.toFixed(6);
         if (marker) {
-            marker.setLatLng(e.latlng);
+          marker.setLatLng(e.latlng);
         } else {
-            marker = L.marker(e.latlng).addTo(map);
+          marker = L.marker(e.latlng).addTo(map);
         }
+      });
     });
+
     function checkLocationSelected() {
       const lat = document.getElementById('latitude').value;
       const lng = document.getElementById('longitude').value;
