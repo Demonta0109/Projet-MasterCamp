@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ g.lang }}">
 <head>
   <meta charset="UTF-8">
-  <title>Annoter</title>
+  <title>{% if g.lang == 'fr' %}Annoter{% else %}Annotate{% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="preload" href="{{ url_for('static', filename='style.css') }}" as="style">
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -10,24 +10,47 @@
 <body>
 
 <header>
-  <h1>Annoter l'image</h1>
+  <h1>
+    {% if g.lang == 'fr' %}
+      Annoter l'image
+    {% else %}
+      Annotate image
+    {% endif %}
+  </h1>
   <nav>
-    <a href="{{ url_for('dashboard') }}">Voir le tableau de bord</a>
+    <a href="{{ url_for('dashboard') }}">
+      {% if g.lang == 'fr' %}Voir le tableau de bord{% else %}View dashboard{% endif %}
+    </a>
   </nav>
 </header>
 
+<div style="text-align:right; margin: 0.5em 1em 0 0;">
+  <form method="get" action="{{ url_for('set_language_route', lang='en' if g.lang == 'fr' else 'fr') }}">
+    <button type="submit" style="background:none;border:none;color:#007bff;cursor:pointer;">
+      {% if g.lang == 'fr' %}🇬🇧 English{% else %}🇫🇷 Français{% endif %}
+    </button>
+  </form>
+</div>
+
 <main>
-  <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300" loading="lazy" alt="Image à annoter"><br><br>
+  <img src="{{ url_for('static', filename='uploads/' + filename) }}" width="300" loading="lazy" alt="{% if g.lang == 'fr' %}Image à annoter{% else %}Image to annotate{% endif %}"><br><br>
 
   {% if image[3] %}
   <div class="notification {{ image[3] }}">
-    <strong>Classification automatique :
+    <strong>
+      {% if g.lang == 'fr' %}Classification automatique :{% else %}Automatic classification:{% endif %}
       <span style="background-color: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px; font-weight: bold;">
         {{ image[3].upper() }}
       </span>
     </strong>
     <br>
-    <small style="opacity: 0.9;">Vous pouvez modifier cette classification ci-dessous si nécessaire.</small>
+    <small style="opacity: 0.9;">
+      {% if g.lang == 'fr' %}
+        Vous pouvez modifier cette classification ci-dessous si nécessaire.
+      {% else %}
+        You can change this classification below if needed.
+      {% endif %}
+    </small>
   </div>
   {% endif %}
 
@@ -46,47 +69,88 @@
       <input type="hidden" name="{{ key }}" value="{{ val }}">
     {% endfor %}
 
-    <button type="submit" name="annotation" value="pleine">Pleine</button>
-    <button type="submit" name="annotation" value="vide">Vide</button>
-    <button type="submit" name="annotation" value="Adeterminer">À déterminer par l'IA</button>
+    <button type="submit" name="annotation" value="pleine">
+      {% if g.lang == 'fr' %}Pleine{% else %}Full{% endif %}
+    </button>
+    <button type="submit" name="annotation" value="vide">
+      {% if g.lang == 'fr' %}Vide{% else %}Empty{% endif %}
+    </button>
+    <button type="submit" name="annotation" value="Adeterminer">
+      {% if g.lang == 'fr' %}À déterminer par l'IA{% else %}To be determined by AI{% endif %}
+    </button>
   </form>
 
-  <h2>Métadonnées</h2>
+  <h2>
+    {% if g.lang == 'fr' %}Métadonnées{% else %}Metadata{% endif %}
+  </h2>
   <ul>
-    <li>Taille fichier : {{ image[6] }} octets</li>
-    <li>Dimensions : {{ image[4] }} x {{ image[5] }} px</li>
-    <li>Couleur moyenne : {{ image[7] }}
+    <li>
+      {% if g.lang == 'fr' %}Taille fichier{% else %}File size{% endif %} : {{ image[6] }} octets
+    </li>
+    <li>
+      {% if g.lang == 'fr' %}Dimensions{% else %}Dimensions{% endif %} : {{ image[4] }} x {{ image[5] }} px
+    </li>
+    <li>
+      {% if g.lang == 'fr' %}Couleur moyenne{% else %}Average color{% endif %} : {{ image[7] }}
       <span class="avg-color-box" id="avg-color-box"></span>
     </li>
-    <li>Contraste : {{ image[8] }}</li>
-    <li>Contours détectés : {{ image[9] }}</li>
+    <li>
+      {% if g.lang == 'fr' %}Contraste{% else %}Contrast{% endif %} : {{ image[8] }}
+    </li>
+    <li>
+      {% if g.lang == 'fr' %}Contours détectés{% else %}Detected edges{% endif %} : {{ image[9] }}
+    </li>
     {% if image[12] and image[13] %}
-    <li>Contours dans la benne : {{ image[12] }} ({{ image[13] }} px)</li>
-    <li>Densité benne : {{ "%.4f"|format(image[12] / image[13]) }}</li>
+    <li>
+      {% if g.lang == 'fr' %}Contours dans la benne{% else %}Edges in bin{% endif %} : {{ image[12] }} ({{ image[13] }} px)
+    </li>
+    <li>
+      {% if g.lang == 'fr' %}Densité benne{% else %}Bin density{% endif %} : {{ "%.4f"|format(image[12] / image[13]) }}
+    </li>
     {% endif %}
   </ul>
 
   {% if image[3] %}
   <section aria-label="Analyse améliorée">
-    <!-- Rendu allégé + accessible -->
     <details open>
-      <summary><strong>Algorithme de Classification Amélioré</strong></summary>
-      <p><strong>Luminosité :</strong>
+      <summary>
+        <strong>
+          {% if g.lang == 'fr' %}Algorithme de Classification Amélioré{% else %}Improved Classification Algorithm{% endif %}
+        </strong>
+      </summary>
+      <p>
+        <strong>
+          {% if g.lang == 'fr' %}Luminosité{% else %}Brightness{% endif %} :
+        </strong>
         {% set rgb = (image[7]|replace('(', '')|replace(')', '')).split(',') %}
         {{ "%.1f"|format((rgb[0]|int * 0.299 + rgb[1]|int * 0.587 + rgb[2]|int * 0.114)) }} / 255
       </p>
-      <p><strong>Contours (image) :</strong> {{ "%.4f"|format(image[9] / (image[4] * image[5])) }}</p>
+      <p>
+        <strong>
+          {% if g.lang == 'fr' %}Contours (image){% else %}Edges (image){% endif %} :
+        </strong>
+        {{ "%.4f"|format(image[9] / (image[4] * image[5])) }}
+      </p>
       {% if image[12] and image[13] %}
-      <p><strong>Contours (benne) :</strong> {{ "%.4f"|format(image[12] / image[13]) }}</p>
+      <p>
+        <strong>
+          {% if g.lang == 'fr' %}Contours (benne){% else %}Edges (bin){% endif %} :
+        </strong>
+        {{ "%.4f"|format(image[12] / image[13]) }}
+      </p>
       {% endif %}
     </details>
   </section>
   {% endif %}
 
-  <button id="toggleHistograms" onclick="toggleHistogramSection()">Voir plus (Histogrammes)</button>
+  <button id="toggleHistograms" onclick="toggleHistogramSection()">
+    {% if g.lang == 'fr' %}Voir plus (Histogrammes){% else %}Show more (Histograms){% endif %}
+  </button>
 
   <div id="histogramSection" style="display: none;">
-    <h3>Histogrammes</h3>
+    <h3>
+      {% if g.lang == 'fr' %}Histogrammes{% else %}Histograms{% endif %}
+    </h3>
     <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
       <canvas id="colorHistogram" width="400" height="200" loading="lazy"></canvas>
       <canvas id="luminanceHistogram" width="400" height="200" loading="lazy"></canvas>
@@ -109,8 +173,8 @@
     const section = document.getElementById('histogramSection');
     section.style.display = section.style.display === 'none' ? 'block' : 'none';
     document.getElementById('toggleHistograms').textContent = section.style.display === 'none'
-      ? 'Voir plus (Histogrammes)'
-      : 'Voir moins';
+      ? '{{ "Voir plus (Histogrammes)" if g.lang == "fr" else "Show more (Histograms)" }}'
+      : '{{ "Voir moins" if g.lang == "fr" else "Show less" }}';
     if (!window.chartsCreated && section.style.display === 'block') {
       createHistograms();
       window.chartsCreated = true;
@@ -127,14 +191,17 @@
       type: 'line',
       data: {
         labels: labels,
-        datasets: ['Rouge', 'Vert', 'Bleu'].map((c, i) => ({
-          label: c,
-          data: histRGB.slice(i * 256, (i + 1) * 256),
-          borderColor: ['red', 'green', 'blue'][i],
-          backgroundColor: 'transparent',
-          fill: false,
-          tension: 0.1
-        }))
+        datasets: [
+          {% if g.lang == 'fr' %}
+            { label: 'Rouge', data: histRGB.slice(0, 256), borderColor: 'red', backgroundColor: 'transparent', fill: false, tension: 0.1 },
+            { label: 'Vert', data: histRGB.slice(256, 512), borderColor: 'green', backgroundColor: 'transparent', fill: false, tension: 0.1 },
+            { label: 'Bleu', data: histRGB.slice(512, 768), borderColor: 'blue', backgroundColor: 'transparent', fill: false, tension: 0.1 }
+          {% else %}
+            { label: 'Red', data: histRGB.slice(0, 256), borderColor: 'red', backgroundColor: 'transparent', fill: false, tension: 0.1 },
+            { label: 'Green', data: histRGB.slice(256, 512), borderColor: 'green', backgroundColor: 'transparent', fill: false, tension: 0.1 },
+            { label: 'Blue', data: histRGB.slice(512, 768), borderColor: 'blue', backgroundColor: 'transparent', fill: false, tension: 0.1 }
+          {% endif %}
+        ]
       },
       options: { responsive: true }
     });
@@ -144,7 +211,7 @@
       data: {
         labels,
         datasets: [{
-          label: 'Luminance',
+          label: '{{ "Luminance" if g.lang == "fr" else "Luminance" }}',
           data: histLum,
           backgroundColor: '#888'
         }]

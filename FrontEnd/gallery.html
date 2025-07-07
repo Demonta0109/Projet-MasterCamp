@@ -1,19 +1,31 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ g.lang }}">
 <head>
   <meta charset="UTF-8" />
-  <title>Galerie des images</title>
+  <title>{% if g.lang == 'fr' %}Galerie des images{% else %}Image Gallery{% endif %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" media="all">
-  
 </head>
 <body>
   <header>
-    <h1>Galerie d'images</h1>
+    <h1>
+      {% if g.lang == 'fr' %}Galerie d'images{% else %}Image Gallery{% endif %}
+    </h1>
   </header>
 
+  <!-- Language switcher -->
+  <div style="text-align:right; margin: 0.5em 1em 0 0;">
+    <form method="get" action="{{ url_for('set_language_route', lang='en' if g.lang == 'fr' else 'fr') }}">
+      <button type="submit" style="background:none;border:none;color:#007bff;cursor:pointer;">
+        {% if g.lang == 'fr' %}🇬🇧 English{% else %}🇫🇷 Français{% endif %}
+      </button>
+    </form>
+  </div>
+
   <main>
-    <a href="{{ url_for('upload_image') }}">← Retour à l’upload</a>
+    <a href="{{ url_for('upload_image') }}">
+      {% if g.lang == 'fr' %}← Retour à l’upload{% else %}← Back to upload{% endif %}
+    </a>
 
     {% if message %}
       <div class="success-message">
@@ -23,27 +35,32 @@
 
     <form method="get" action="{{ url_for('images') }}">
       <label>
-        <input type="radio" name="filtre" value="" {% if not request.args.get('filtre') %}checked{% endif %}> Tous
+        <input type="radio" name="filtre" value="" {% if not request.args.get('filtre') %}checked{% endif %}>
+        {% if g.lang == 'fr' %}Tous{% else %}All{% endif %}
       </label>
       <label style="margin-left:1em;">
-        <input type="radio" name="filtre" value="pleine" {% if request.args.get('filtre') == 'pleine' %}checked{% endif %}> Pleine
+        <input type="radio" name="filtre" value="pleine" {% if request.args.get('filtre') == 'pleine' %}checked{% endif %}>
+        {% if g.lang == 'fr' %}Pleine{% else %}Full{% endif %}
       </label>
       <label style="margin-left:1em;">
-        <input type="radio" name="filtre" value="vide" {% if request.args.get('filtre') == 'vide' %}checked{% endif %}> Vide
+        <input type="radio" name="filtre" value="vide" {% if request.args.get('filtre') == 'vide' %}checked{% endif %}>
+        {% if g.lang == 'fr' %}Vide{% else %}Empty{% endif %}
       </label>
-      <button type="submit" style="margin-left:1em;">Filtrer</button>
+      <button type="submit" style="margin-left:1em;">
+        {% if g.lang == 'fr' %}Filtrer{% else %}Filter{% endif %}
+      </button>
     </form>
 
     <div class="gallery-grid">
       {% for img in images %}
         <div class="gallery-item {{ img[3]|trim|lower }}">
           <form class="delete-form" action="{{ url_for('delete_image', image_id=img[0]) }}" method="post">
-            <button type="submit" title="Supprimer" onclick="return confirm('Supprimer cette image ?')">&times;</button>
+            <button type="submit" title="{% if g.lang == 'fr' %}Supprimer{% else %}Delete{% endif %}" onclick="return confirm('{% if g.lang == 'fr' %}Supprimer cette image ?{% else %}Delete this image?{% endif %}')">&times;</button>
           </form>
           <a href="{{ url_for('image_detail', image_id=img[0]) }}">
             <img 
               src="{{ url_for('static', filename='uploads/' + img[1]) }}" 
-              alt="Image {{ img[1] }}" 
+              alt="{% if g.lang == 'fr' %}Image {{ img[1] }}{% else %}Image {{ img[1] }}{% endif %}" 
               width="150"
               loading="lazy"
             >

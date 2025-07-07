@@ -1,64 +1,68 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ g.lang }}">
 <head>
   <meta charset="UTF-8" />
-  <title>Dashboard</title>
-
-  <!-- CSS local (évite les CDN tiers) -->
+  <title>{% if g.lang == 'fr' %}Tableau de bord{% else %}Dashboard{% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" media="all">
-
-  <!-- Chart.js (chargé en différé uniquement si nécessaire) -->
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <!-- Leaflet uniquement si carte nécessaire -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
   <noscript><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"></noscript>
-
 </head>
 <body>
   <div class="dashboard-container">
     <header class="dashboard-header">
-      <h1>Tableau de bord</h1>
+      <h1>{% if g.lang == 'fr' %}Tableau de bord{% else %}Dashboard{% endif %}</h1>
       <nav>
-        <a href="{{ url_for('upload_image') }}">Upload</a>
-        <a href="{{ url_for('images') }}">Galerie</a>
+        <a href="{{ url_for('upload_image') }}">
+          {% if g.lang == 'fr' %}Upload{% else %}Upload{% endif %}
+        </a>
+        <a href="{{ url_for('images') }}">
+          {% if g.lang == 'fr' %}Galerie{% else %}Gallery{% endif %}
+        </a>
       </nav>
     </header>
 
-    <div class="stats">
-      <p><strong>Total :</strong> {{ total }}</p>
-      <p><strong>Pleines :</strong> {{ full }}</p>
-      <p><strong>Vides :</strong> {{ empty }}</p>
+    <!-- Sélecteur de langue -->
+    <div style="text-align:right; margin: 0.5em 1em 0 0;">
+      <form method="get" action="{{ url_for('set_language_route', lang='en' if g.lang == 'fr' else 'fr') }}">
+        <button type="submit" style="background:none;border:none;color:#007bff;cursor:pointer;">
+          {% if g.lang == 'fr' %}🇬🇧 English{% else %}🇫🇷 Français{% endif %}
+        </button>
+      </form>
     </div>
 
-    <h2>Graphiques statistiques</h2>
+    <div class="stats">
+      <p><strong>{% if g.lang == 'fr' %}Total :{% else %}Total:{% endif %}</strong> {{ total }}</p>
+      <p><strong>{% if g.lang == 'fr' %}Pleines :{% else %}Full:{% endif %}</strong> {{ full }}</p>
+      <p><strong>{% if g.lang == 'fr' %}Vides :{% else %}Empty:{% endif %}</strong> {{ empty }}</p>
+    </div>
+
+    <h2>{% if g.lang == 'fr' %}Graphiques statistiques{% else %}Statistics charts{% endif %}</h2>
     <div class="charts">
-      <img src="data:image/png;base64,{{ pie_chart }}" alt="Diagramme circulaire" loading="lazy">
-      <img src="data:image/png;base64,{{ hist_chart }}" alt="Histogramme" loading="lazy">
+      <img src="data:image/png;base64,{{ pie_chart }}" alt="{% if g.lang == 'fr' %}Diagramme circulaire{% else %}Pie chart{% endif %}" loading="lazy">
+      <img src="data:image/png;base64,{{ hist_chart }}" alt="{% if g.lang == 'fr' %}Histogramme{% else %}Histogram{% endif %}" loading="lazy">
     </div>
 
     <div>
-      <h2>Évolution des uploads</h2>
+      <h2>{% if g.lang == 'fr' %}Évolution des uploads{% else %}Uploads over time{% endif %}</h2>
       {% if dates and dates|length > 0 %}
         <canvas id="lineChart" width="1000" height="400"></canvas>
       {% else %}
         <div class="no-data-message">
-          Aucune donnée disponible
+          {% if g.lang == 'fr' %}Aucune donnée disponible{% else %}No data available{% endif %}
         </div>
       {% endif %}
     </div>
 
-    <h2>Carte des localisations</h2>
+    <h2>{% if g.lang == 'fr' %}Carte des localisations{% else %}Location map{% endif %}</h2>
     <div id="map" style="height: 400px; border-radius: 12px; margin-bottom: 20px;"></div>
   </div>
 
-  <!-- Scripts différés -->
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const bins = {{ bins | tojson | safe }};
     const dates = {{ dates | tojson | safe }};
 
-    // Initialisation carte (si élément présent)
     window.addEventListener('load', () => {
       const mapElement = document.getElementById('map');
       if (mapElement && bins.length) {
@@ -97,7 +101,7 @@
           data: {
             labels,
             datasets: [{
-              label: 'Images / jour',
+              label: '{% if g.lang == "fr" %}Images / jour{% else %}Images per day{% endif %}',
               data,
               borderColor: '#4bc0c0',
               backgroundColor: 'rgba(75,192,192,0.1)',
@@ -110,8 +114,8 @@
             responsive: true,
             plugins: { legend: { display: false } },
             scales: {
-              x: { title: { display: true, text: 'Date' }, grid: { color: '#eee' } },
-              y: { title: { display: true, text: 'Nbre d\'images' }, beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#eee' } }
+              x: { title: { display: true, text: '{% if g.lang == "fr" %}Date{% else %}Date{% endif %}' }, grid: { color: '#eee' } },
+              y: { title: { display: true, text: '{% if g.lang == "fr" %}Nbre d\'images{% else %}Number of images{% endif %}' }, beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#eee' } }
             }
           }
         });

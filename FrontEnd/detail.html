@@ -1,40 +1,52 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ g.lang }}">
 <head>
   <meta charset="UTF-8" />
-  <title>Détail de l’image</title>
+  <title>{% if g.lang == 'fr' %}Détail de l’image{% else %}Image details{% endif %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Chargement de la feuille de style localement -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" media="all">
-  
 </head>
 <body>
   <header>
-    <h1>Détail de l’image</h1>
+    <h1>
+      {% if g.lang == 'fr' %}Détail de l’image{% else %}Image details{% endif %}
+    </h1>
   </header>
+  <!-- Language selection form -->
+  <div style="text-align:right; margin: 0.5em 1em 0 0;">
+    <form method="get" action="{{ url_for('set_language_route', lang='en' if g.lang == 'fr' else 'fr') }}">
+      <button type="submit" style="background:none;border:none;color:#007bff;cursor:pointer;">
+        {% if g.lang == 'fr' %}🇬🇧 English{% else %}🇫🇷 Français{% endif %}
+      </button>
+    </form>
+  </div>
   <main>
     <img 
       src="{{ url_for('static', filename='uploads/' + image[1]) }}" 
-      alt="Image nommée {{ image[1] }}" 
+      alt="{% if g.lang == 'fr' %}Image nommée {{ image[1] }}{% else %}Image named {{ image[1] }}{% endif %}" 
       width="500" 
       loading="lazy"
     >
 
     <ul>
-      <li><strong>Fichier :</strong> {{ image[1] }}</li>
-      <li><strong>Date :</strong> {{ image[2] }}</li>
-      <li><strong>Annotation :</strong> {{ image[3] }}</li>
-      <li><strong>Dimensions :</strong> {{ image[4] }} x {{ image[5] }} px</li>
-      <li><strong>Taille fichier :</strong> {{ image[6] }} Ko</li>
-      <li><strong>Couleur moyenne :</strong> {{ image[7] }}</li>
-      <li><strong>Contraste :</strong> {{ image[8] }}</li>
-      <li><strong>Contours :</strong> {{ image[9] }}</li>
+      <li><strong>{% if g.lang == 'fr' %}Fichier{% else %}File{% endif %} :</strong> {{ image[1] }}</li>
+      <li><strong>{% if g.lang == 'fr' %}Date{% else %}Date{% endif %} :</strong> {{ image[2] }}</li>
+      <li><strong>{% if g.lang == 'fr' %}Annotation{% else %}Annotation{% endif %} :</strong> {{ image[3] }}</li>
+      <li><strong>{% if g.lang == 'fr' %}Dimensions{% else %}Dimensions{% endif %} :</strong> {{ image[4] }} x {{ image[5] }} px</li>
+      <li><strong>{% if g.lang == 'fr' %}Taille fichier{% else %}File size{% endif %} :</strong> {{ image[6] }} Ko</li>
+      <li><strong>{% if g.lang == 'fr' %}Couleur moyenne{% else %}Average color{% endif %} :</strong> {{ image[7] }}</li>
+      <li><strong>{% if g.lang == 'fr' %}Contraste{% else %}Contrast{% endif %} :</strong> {{ image[8] }}</li>
+      <li><strong>{% if g.lang == 'fr' %}Contours{% else %}Edges{% endif %} :</strong> {{ image[9] }}</li>
     </ul>
 
     <nav>
-      <a href="{{ url_for('images') }}">← Retour à la galerie</a>
+      <a href="{{ url_for('images') }}">
+        {% if g.lang == 'fr' %}← Retour à la galerie{% else %}← Back to gallery{% endif %}
+      </a>
       <form action="{{ url_for('delete_image', image_id=image[0]) }}" method="post" style="display:inline;">
-        <button type="submit" onclick="return confirm('Supprimer cette image ?')">Supprimer</button>
+        <button type="submit" onclick="return confirm('{% if g.lang == 'fr' %}Supprimer cette image ?{% else %}Delete this image?{% endif %}')">
+          {% if g.lang == 'fr' %}Supprimer{% else %}Delete{% endif %}
+        </button>
       </form>
     </nav>
   </main>

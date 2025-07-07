@@ -1,29 +1,44 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ g.lang }}">
 <head>
   <meta charset="UTF-8">
-  <title>Valider la localisation</title>
+  <title>{% if g.lang == 'fr' %}Valider la localisation{% else %}Validate location{% endif %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" media="print" onload="this.media='all'">
 </head>
 <body>
   <div class="center">
-    <h1>Valider la position de la poubelle</h1>
+    <h1>
+      {% if g.lang == 'fr' %}Valider la position de la poubelle{% else %}Validate bin position{% endif %}
+    </h1>
 
     <img 
       src="{{ url_for('static', filename='uploads/' + filename) }}" 
       width="300" 
       loading="lazy" 
-      alt="Image de la poubelle à géolocaliser"><br>
+      alt="{% if g.lang == 'fr' %}Image de la poubelle à géolocaliser{% else %}Bin image to geolocate{% endif %}"><br>
 
     <form method="post" onsubmit="return checkLocationSelected();">
-      <div id="map" role="application" aria-label="Carte pour sélectionner la position de la poubelle"></div>
+      <div id="map" role="application" aria-label="{% if g.lang == 'fr' %}Carte pour sélectionner la position de la poubelle{% else %}Map to select bin position{% endif %}"></div>
       <input type="hidden" name="latitude" id="latitude">
       <input type="hidden" name="longitude" id="longitude">
-      <button type="submit">Valider la position</button>
+      <button type="submit">
+        {% if g.lang == 'fr' %}Valider la position{% else %}Validate position{% endif %}
+      </button>
     </form>
 
-    <a href="{{ url_for('upload_image') }}">Annuler</a>
+    <a href="{{ url_for('upload_image') }}">
+      {% if g.lang == 'fr' %}Annuler{% else %}Cancel{% endif %}
+    </a>
+  </div>
+
+  <!-- Sélecteur de langue -->
+  <div style="text-align:right; margin: 0.5em 1em 0 0;">
+    <form method="get" action="{{ url_for('set_language_route', lang='en' if g.lang == 'fr' else 'fr') }}">
+      <button type="submit" style="background:none;border:none;color:#007bff;cursor:pointer;">
+        {% if g.lang == 'fr' %}🇬🇧 English{% else %}🇫🇷 Français{% endif %}
+      </button>
+    </form>
   </div>
 
   <!-- Déplacement en bas pour éviter le blocage du rendu -->
@@ -55,7 +70,7 @@
       const lat = document.getElementById('latitude').value;
       const lng = document.getElementById('longitude').value;
       if (!lat || !lng) {
-        alert('Veuillez sélectionner la position de la poubelle sur la carte avant de valider.');
+        alert('{% if g.lang == "fr" %}Veuillez sélectionner la position de la poubelle sur la carte avant de valider.{% else %}Please select the bin position on the map before validating.{% endif %}');
         return false;
       }
       return true;

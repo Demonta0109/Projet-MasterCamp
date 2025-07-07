@@ -1,21 +1,32 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ g.lang }}">
 <head>
   <meta charset="UTF-8" />
-  <title>Upload Image</title>
+  <title>{% if g.lang == 'fr' %}Upload une image{% else %}Upload an image{% endif %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" media="all">
-
 </head>
 <body>
 
 <header>
-  <h1>Upload une image</h1>
-  <a href="{{ url_for('images') }}">Galerie</a>
+  <h1>{% if g.lang == 'fr' %}Upload une image{% else %}Upload an image{% endif %}</h1>
+  <a href="{{ url_for('images') }}">
+    {% if g.lang == 'fr' %}Galerie{% else %}Gallery{% endif %}
+  </a>
   <nav>
-    <a href="{{ url_for('dashboard') }}">Tableau de bord</a>
+    <a href="{{ url_for('dashboard') }}">
+      {% if g.lang == 'fr' %}Tableau de bord{% else %}Dashboard{% endif %}
+    </a>
   </nav>
 </header>
+
+<div style="text-align:right; margin: 0.5em 1em 0 0;">
+  <form method="get" action="{{ url_for('set_language_route', lang='en' if g.lang == 'fr' else 'fr') }}">
+    <button type="submit" style="background:none;border:none;color:#007bff;cursor:pointer;">
+      {% if g.lang == 'fr' %}🇬🇧 English{% else %}🇫🇷 Français{% endif %}
+    </button>
+  </form>
+</div>
 
 <main>
   {% if error_message %}
@@ -23,17 +34,34 @@
   {% endif %}
 
   <form class="main-form" method="post" enctype="multipart/form-data">
-    
     <div class="form-group">
-      <h3>Sélectionner des images :</h3>
-      <label><input type="radio" name="upload_type" value="single" checked onchange="toggleUploadMode()"> Une seule image</label>
-      <label><input type="radio" name="upload_type" value="multiple" onchange="toggleUploadMode()"> Plusieurs images</label>
-      <label><input type="radio" name="upload_type" value="folder" onchange="toggleUploadMode()"> Dossier entier</label>
+      <h3>{% if g.lang == 'fr' %}Sélectionner des images :{% else %}Select images:{% endif %}</h3>
+      <label>
+        <input type="radio" name="upload_type" value="single" checked onchange="toggleUploadMode()">
+        {% if g.lang == 'fr' %}Une seule image{% else %}Single image{% endif %}
+      </label>
+      <label>
+        <input type="radio" name="upload_type" value="multiple" onchange="toggleUploadMode()">
+        {% if g.lang == 'fr' %}Plusieurs images{% else %}Multiple images{% endif %}
+      </label>
+      <label>
+        <input type="radio" name="upload_type" value="folder" onchange="toggleUploadMode()">
+        {% if g.lang == 'fr' %}Dossier entier{% else %}Whole folder{% endif %}
+      </label>
     </div>
 
     <div class="form-group">
-      <label><input type="checkbox" name="reanalyze" value="true"> Ré-analyser les images déjà uploadées</label>
-      <small>Les doublons seront ré-analysés au lieu d’être ignorés.</small>
+      <label>
+        <input type="checkbox" name="reanalyze" value="true">
+        {% if g.lang == 'fr' %}Ré-analyser les images déjà uploadées{% else %}Re-analyze already uploaded images{% endif %}
+      </label>
+      <small>
+        {% if g.lang == 'fr' %}
+          Les doublons seront ré-analysés au lieu d’être ignorés.
+        {% else %}
+          Duplicates will be re-analyzed instead of ignored.
+        {% endif %}
+      </small>
     </div>
 
     <div id="single-upload" class="form-group">
@@ -42,25 +70,59 @@
 
     <div id="multiple-upload" class="form-group" style="display: none;">
       <input type="file" name="images" multiple accept=".png,.jpg,.jpeg,.webp">
-      <small>Maintenez Ctrl (ou Cmd) pour en sélectionner plusieurs.</small>
+      <small>
+        {% if g.lang == 'fr' %}
+          Maintenez Ctrl (ou Cmd) pour en sélectionner plusieurs.
+        {% else %}
+          Hold Ctrl (or Cmd) to select multiple files.
+        {% endif %}
+      </small>
     </div>
 
     <div id="folder-upload" class="form-group" style="display: none;">
       <input type="file" name="folder" webkitdirectory directory accept=".png,.jpg,.jpeg,.webp">
-      <small>Sélectionnez un dossier contenant des images.</small>
+      <small>
+        {% if g.lang == 'fr' %}
+          Sélectionnez un dossier contenant des images.
+        {% else %}
+          Select a folder containing images.
+        {% endif %}
+      </small>
     </div>
 
-    <button type="submit" id="upload-btn">Uploader</button>
+    <button type="submit" id="upload-btn">
+      {% if g.lang == 'fr' %}Uploader{% else %}Upload{% endif %}
+    </button>
 
     <div id="progress-container">
       <div style="background-color:#f0f0f0; border-radius:10px; padding:3px;">
         <div id="progress-bar"></div>
       </div>
-      <p id="progress-text">Traitement en cours...</p>
+      <p id="progress-text">
+        {% if g.lang == 'fr' %}Traitement en cours...{% else %}Processing...{% endif %}
+      </p>
     </div>
   </form>
 
   <script>
+    // Textes multilingues passés depuis Jinja
+    const TEXTS = {
+      uploadBtn: {
+        single: "{{ 'Uploader' if g.lang == 'fr' else 'Upload' }}",
+        multiple: "{{ 'Uploader les images' if g.lang == 'fr' else 'Upload images' }}",
+        folder: "{{ 'Analyser le dossier' if g.lang == 'fr' else 'Analyze folder' }}"
+      },
+      processing: "{{ 'Traitement...' if g.lang == 'fr' else 'Processing...' }}",
+      retry: "{{ 'Réessayer' if g.lang == 'fr' else 'Retry' }}",
+      error: "{{ 'Erreur' if g.lang == 'fr' else 'Error' }}",
+      processed: "{{ 'image(s) traitée(s)' if g.lang == 'fr' else 'image(s) processed' }}",
+      reanalyzed: "{{ 'ré-analysée(s)' if g.lang == 'fr' else 're-analyzed' }}",
+      duplicate: "{{ 'doublon(s)' if g.lang == 'fr' else 'duplicate(s)' }}",
+      errorCount: "{{ 'erreur(s)' if g.lang == 'fr' else 'error(s)' }}",
+      detected: "{{ 'image(s) détectée(s)' if g.lang == 'fr' else 'image(s) detected' }}",
+      selected: "{{ 'fichier(s) sélectionné(s)' if g.lang == 'fr' else 'file(s) selected' }}"
+    };
+
     function toggleUploadMode() {
       const type = document.querySelector('input[name="upload_type"]:checked').value;
       const types = ['single', 'multiple', 'folder'];
@@ -71,11 +133,7 @@
           input.toggleAttribute('required', t === type);
         }
       });
-      document.getElementById('upload-btn').textContent = {
-        single: 'Uploader',
-        multiple: 'Uploader les images',
-        folder: 'Analyser le dossier'
-      }[type] || 'Uploader';
+      document.getElementById('upload-btn').textContent = TEXTS.uploadBtn[type] || TEXTS.uploadBtn.single;
     }
 
     document.querySelector('.main-form').addEventListener('submit', function(e) {
@@ -87,22 +145,22 @@
         e.preventDefault();
         const formData = new FormData(this);
         btn.disabled = true;
-        btn.textContent = 'Traitement...';
+        btn.textContent = TEXTS.processing;
         progress.style.display = 'block';
 
         fetch('/upload_ajax', { method: 'POST', body: formData })
           .then(r => r.json())
           .then(data => {
-            let message = `${data.processed_count || 0} image(s) traitée(s)`;
-            if (data.reanalyzed_count) message += ` • ${data.reanalyzed_count} ré-analysée(s)`;
-            if (data.duplicate_count) message += ` • ${data.duplicate_count} doublon(s)`;
-            if (data.error_count) message += ` • ${data.error_count} erreur(s)`;
+            let message = `${data.processed_count || 0} ${TEXTS.processed}`;
+            if (data.reanalyzed_count) message += ` • ${data.reanalyzed_count} ${TEXTS.reanalyzed}`;
+            if (data.duplicate_count) message += ` • ${data.duplicate_count} ${TEXTS.duplicate}`;
+            if (data.error_count) message += ` • ${data.error_count} ${TEXTS.errorCount}`;
             window.location.href = `/images?message=${encodeURIComponent(message)}`;
           })
           .catch(err => {
-            alert('Erreur : ' + err.message);
+            alert(TEXTS.error + ' : ' + err.message);
             btn.disabled = false;
-            btn.textContent = 'Réessayer';
+            btn.textContent = TEXTS.retry;
             progress.style.display = 'none';
           });
       }
@@ -121,9 +179,9 @@
           }
           if (uploadType === 'folder') {
             const count = Array.from(files).filter(f => /\.(png|jpe?g|webp)$/i.test(f.name)).length;
-            status.textContent = `${count} image(s) détectée(s)`;
+            status.textContent = `${count} ${TEXTS.detected}`;
           } else {
-            status.textContent = `${files.length} fichier(s) sélectionné(s)`;
+            status.textContent = `${files.length} ${TEXTS.selected}`;
           }
         }
       }

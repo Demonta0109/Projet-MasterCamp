@@ -1,5 +1,6 @@
 # app.py
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask import g
 import os
 import sqlite3
 import hashlib
@@ -17,6 +18,17 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
 app = Flask(__name__, template_folder="../FrontEnd", static_folder="../static")
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.secret_key = 'your_secret_key'  # Ajoute une clé secrète pour la session
+
+@app.before_request
+def set_language():
+    g.lang = session.get('lang', 'fr')
+
+@app.route('/set_language/<lang>')
+def set_language_route(lang):
+    if lang in ['fr', 'en']:
+        session['lang'] = lang
+    return redirect(request.referrer or url_for('upload_image'))
 
 # Init base SQLite
 def init_db():
@@ -118,18 +130,30 @@ def upload_image():
                         else:
                             errors.append(result)
         
-        # Construire le message de résultat
+        # Construire le message de résultat multilingue
         message_parts = []
         if processed_files:
-            message_parts.append(f"{len(processed_files)} nouvelle(s) image(s) traitée(s)")
+            message_parts.append(tr(
+                f"{len(processed_files)} nouvelle(s) image(s) traitée(s)",
+                f"{len(processed_files)} new image(s) processed"
+            ))
         if reanalyzed:
-            message_parts.append(f"{len(reanalyzed)} image(s) ré-analysée(s)")
+            message_parts.append(tr(
+                f"{len(reanalyzed)} image(s) ré-analysée(s)",
+                f"{len(reanalyzed)} image(s) re-analyzed"
+            ))
         if duplicates:
-            message_parts.append(f"{len(duplicates)} doublon(s) ignoré(s)")
+            message_parts.append(tr(
+                f"{len(duplicates)} doublon(s) ignoré(s)",
+                f"{len(duplicates)} duplicate(s) ignored"
+            ))
         if errors:
-            message_parts.append(f"{len(errors)} erreur(s)")
+            message_parts.append(tr(
+                f"{len(errors)} erreur(s)",
+                f"{len(errors)} error(s)"
+            ))
         
-        message = " • ".join(message_parts) if message_parts else "Aucun fichier traité"
+        message = " • ".join(message_parts) if message_parts else tr("Aucun fichier traité", "No file processed")
         
         if processed_files or reanalyzed:
             if len(processed_files) == 1 and not reanalyzed and not duplicates and not errors:
@@ -181,7 +205,10 @@ def process_single_file(file, reanalyze=False):
             os.remove(temp_path)
             return {
                 'success': False,
-                'message': duplicate_info['message'],
+                'message': tr(
+                    duplicate_info['message'],
+                    duplicate_info['message'].replace("Fichier", "File").replace("déjà analysé", "already analyzed").replace("identique", "identical").replace("même contenu", "same content").replace("avec le même nom", "with the same name")
+                ),
                 'type': 'duplicate',
                 'duplicate_info': duplicate_info,
                 'original_filename': filename
@@ -223,7 +250,7 @@ def process_single_file(file, reanalyze=False):
             return {
                 'success': True,
                 'filename': existing_filename,
-                'message': f"Image {existing_filename} ré-analysée avec succès",
+                'message': tr(f"Image {existing_filename} ré-analysée avec succès", f"Image {existing_filename} successfully re-analyzed"),
                 'type': 'reanalyzed',
                 'original_id': duplicate_info['id']
             }
@@ -256,7 +283,7 @@ def process_single_file(file, reanalyze=False):
         return {
             'success': True,
             'filename': filename,
-            'message': f"Image {filename} analysée avec succès",
+            'message': tr(f"Image {filename} analysée avec succès", f"Image {filename} successfully analyzed"),
             'type': 'success'
         }
     except Exception as e:
@@ -265,7 +292,7 @@ def process_single_file(file, reanalyze=False):
             os.remove(temp_path)
         return {
             'success': False,
-            'message': f"Erreur lors du traitement de {filename}: {str(e)}",
+            'message': tr(f"Erreur lors du traitement de {filename}: {str(e)}", f"Error processing {filename}: {str(e)}"),
             'type': 'error',
             'original_filename': filename
         }
@@ -811,7 +838,7 @@ def image_detail(image_id):
     if image:
         return render_template('detail.html', image=image)
     else:
-        return "Image non trouvée", 404
+        return tr("Image non trouvée", "Image not found"), 404
 
 @app.route('/dashboard')
 def dashboard():
@@ -950,7 +977,7 @@ def upload_ajax():
         total_files = len(valid_files)
         
         if total_files == 0:
-            return jsonify({'error': 'Aucun fichier valide trouvé'}), 400
+            return jsonify({'error': tr('Aucun fichier valide trouvé', 'No valid file found')}), 400
         
         for i, file in enumerate(valid_files):
             try:
@@ -994,7 +1021,7 @@ def upload_ajax():
         })
         
     except Exception as e:
-        return jsonify({'error': f'Erreur lors du traitement: {str(e)}'}), 500
+        return jsonify({'error': tr(f'Erreur lors du traitement: {str(e)}', f'Error during processing: {str(e)}')}), 500
         
 
 def calculate_file_hash(file_path):
@@ -1031,7 +1058,10 @@ def is_duplicate_file(file_path, filename):
             'filename': hash_duplicate[1],
             'upload_date': hash_duplicate[2],
             'annotation': hash_duplicate[3],
-            'message': f"Fichier identique déjà analysé (même contenu): {hash_duplicate[1]}"
+            'message': tr(
+                f"Fichier identique déjà analysé (même contenu): {hash_duplicate[1]}",
+                f"Identical file already analyzed (same content): {hash_duplicate[1]}"
+            )
         }
     
     # Vérifier ensuite par nom de fichier
@@ -1046,8 +1076,11 @@ def is_duplicate_file(file_path, filename):
             'id': name_duplicate[0],
             'filename': name_duplicate[1],
             'upload_date': name_duplicate[2],
-            'annotation': hash_duplicate[3],
-            'message': f"Fichier avec le même nom déjà analysé: {name_duplicate[1]}"
+            'annotation': name_duplicate[3],
+            'message': tr(
+                f"Fichier avec le même nom déjà analysé: {name_duplicate[1]}",
+                f"File with the same name already analyzed: {name_duplicate[1]}"
+            )
         }
     
     return False, None
@@ -1063,13 +1096,13 @@ def reanalyze_image(image_id):
         conn.close()
         
         if not row:
-            return redirect(url_for('images', message="Image non trouvée"))
+            return redirect(url_for('images', message=tr("Image non trouvée", "Image not found")))
         
         filename = row[0]
         image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         
         if not os.path.exists(image_path):
-            return redirect(url_for('images', message=f"Fichier {filename} non trouvé sur le disque"))
+            return redirect(url_for('images', message=tr(f"Fichier {filename} non trouvé sur le disque", f"File {filename} not found on disk")))
         
         # Ré-analyser l'image
         width, height, filesize, avg_color, contrast, edge_count, histogram, histogram_luminance, bin_edge_count, bin_area, patch_diversity = extract_features(image_path)
@@ -1092,12 +1125,16 @@ def reanalyze_image(image_id):
         conn.commit()
         conn.close()
         
-        return redirect(url_for('images', message=f"Image {filename} ré-analysée avec succès"))
-        
+        return redirect(url_for('images', message=tr(f"Image {filename} ré-analysée avec succès", f"Image {filename} successfully re-analyzed")))
     except Exception as e:
-        return redirect(url_for('images', message=f"Erreur lors de la ré-analyse: {str(e)}"))
+        return redirect(url_for('images', message=tr(f"Erreur lors de la ré-analyse: {str(e)}", f"Error during re-analysis: {str(e)}")))
 
 
+
+def tr(fr, en):
+    """Simple translation helper based on session language."""
+    lang = session.get('lang', 'fr')
+    return fr if lang == 'fr' else en
 
 if __name__ == '__main__':
     app.run(debug=True)
