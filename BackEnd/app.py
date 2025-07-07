@@ -9,6 +9,8 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 import numpy as np
 import cv2
+import matplotlib
+matplotlib.use('Agg')  # Utiliser le backend non-interactif AVANT d'importer pyplot
 import matplotlib.pyplot as plt
 from io import BytesIO
 import base64
