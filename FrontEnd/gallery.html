@@ -64,6 +64,13 @@
               width="150"
               loading="lazy"
             >
+            <div class="meta-popup">
+              <strong>{% if g.lang == 'fr' %}Nom :{% else %}Name:{% endif %}</strong> {{ img[1] }}<br>
+              <strong>{% if g.lang == 'fr' %}Date :{% else %}Date:{% endif %}</strong> {{ img[2] }}<br>
+              <strong>{% if g.lang == 'fr' %}Annotation :{% else %}Annotation:{% endif %}</strong> {{ img[3] }}<br>
+              <strong>{% if g.lang == 'fr' %}Dimensions :{% else %}Dimensions:{% endif %}</strong> {{ img[4] }}x{{ img[5] }}<br>
+              <strong>{% if g.lang == 'fr' %}Taille :{% else %}Size:{% endif %}</strong> {{ img[6] }} Ko
+            </div>
           </a>
         </div>
       {% endfor %}
