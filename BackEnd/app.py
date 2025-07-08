@@ -24,19 +24,33 @@ app.secret_key = 'your_secret_key'  # Ajoute une clé secrète pour la session
 
 @app.before_request
 def set_language():
+    """
+    Fonction exécutée avant chaque requête pour définir la langue de session.
+    """
     g.lang = session.get('lang', 'fr')
 
 @app.route('/set_language/<lang>')
 def set_language_route(lang):
+    """
+    Route pour changer la langue de l'interface utilisateur.
+    """
     if lang in ['fr', 'en']:
         session['lang'] = lang
     return redirect(request.referrer or url_for('upload_image'))
 
 # Init base SQLite
 def init_db():
+    """
+    Initialise la base de données SQLite pour stocker les informations des images.
+
+    Args : 
+        - Aucun
+
+    Return : 
+        - Aucun Mais crée ou réinitialise la base de données 'db.sqlite' avec une table 'images'."""
     conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
-    c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
+    #c.execute('DROP TABLE IF EXISTS images') # Supprimer la table si elle existe déjà
     c.execute('''
         CREATE TABLE IF NOT EXISTS images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,10 +84,28 @@ def init_db():
 init_db()
 
 def allowed_file(filename):
+    """
+    Vérifie si un fichier a une extension autorisée pour l'upload.
+    
+    Args:
+        filename (str): Le nom du fichier à vérifier
+    
+    Returns:
+        bool: True si l'extension est autorisée, False sinon
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/', methods=['GET', 'POST'])
 def upload_image():
+    """
+    Route principale pour l'upload d'images. Gère les uploads simples, multiples et par dossier.
+    
+    Args:
+        Aucun (utilise request.method, request.form, request.files)
+    
+    Returns:
+        flask.Response: Redirection vers validate_location, images, ou render du template upload.html
+    """
     if request.method == 'POST':
         upload_type = request.form.get('upload_type', 'single')
         reanalyze = request.form.get('reanalyze') == 'true'
@@ -301,6 +333,15 @@ def process_single_file(file, reanalyze=False):
 
 @app.route('/validate_location/<filename>', methods=['GET', 'POST'])
 def validate_location(filename):
+    """
+    Route pour valider et enregistrer la localisation GPS d'une image.
+    
+    Args:
+        filename (str): Le nom du fichier image
+    
+    Returns:
+        flask.Response: Redirection vers annotate ou render du template validate_location.html
+    """
     if request.method == 'POST':
         latitude = request.form.get('latitude')
         longitude = request.form.get('longitude')
@@ -314,6 +355,15 @@ def validate_location(filename):
 
 @app.route('/annotate/<filename>', methods=['GET', 'POST'])
 def annotate(filename):
+    """
+    Route pour annoter une image (pleine, vide, ou classification automatique).
+    
+    Args:
+        filename (str): Le nom du fichier image à annoter
+    
+    Returns:
+        flask.Response: Redirection vers upload_image ou render du template annotate.html
+    """
     if request.method == 'POST':
         annotation = request.form['annotation']
         if annotation in ['pleine', 'vide']:
@@ -387,6 +437,16 @@ def get_stats():
     return render_template('stats.html', stats=stats)
 
 def extract_features(image_path):
+    """
+    Extrait les caractéristiques visuelles d'une image pour la classification.
+    
+    Args:
+        image_path (str): Chemin vers le fichier image
+    
+    Returns:
+        tuple: (width, height, filesize_kb, avg_color_str, contrast, edge_count, 
+                hist_rgb_str, hist_luminance_str, bin_edge_count, bin_region_area, patch_diversity)
+    """
     filesize_bytes = os.path.getsize(image_path)
     filesize_kb = round(filesize_bytes / 1024, 2)  # Convertir en Ko avec 2 décimales
     img = Image.open(image_path).convert('RGB')
@@ -494,7 +554,14 @@ def analyze_patch_color_diversity(img_array):
 def extract_masked_region(img_array, mask):
     """
     Extrait la région de l'image correspondant au masque et la convertit en rectangle
-    pour l'analyse de patchs
+    pour l'analyse de patchs.
+    
+    Args:
+        img_array (numpy.ndarray): Image en format numpy array RGB
+        mask (numpy.ndarray): Masque binaire de la région à extraire
+    
+    Returns:
+        numpy.ndarray or None: Région rectangulaire extraite ou None si le masque est vide
     """
     # Trouver les coordonnées de la bounding box du masque
     coords = np.column_stack(np.where(mask > 0))
@@ -938,6 +1005,15 @@ def bin_map():
 
 @app.route('/delete/<int:image_id>', methods=['POST'])
 def delete_image(image_id):
+    """
+    Route pour supprimer une image de la base de données et du système de fichiers.
+    
+    Args:
+        image_id (int): L'ID de l'image à supprimer
+    
+    Returns:
+        flask.Response: Redirection vers la galerie d'images
+    """
     conn = sqlite3.connect('db.sqlite')
     c = conn.cursor()
     # Récupérer le nom du fichier pour supprimer le fichier physique
@@ -955,7 +1031,16 @@ def delete_image(image_id):
 
 @app.route('/upload_ajax', methods=['POST'])
 def upload_ajax():
-    """Route AJAX pour le traitement des uploads multiples avec progression"""
+    """
+    Route AJAX pour le traitement des uploads multiples avec progression.
+    Gère les uploads asynchrones avec retour JSON du statut.
+    
+    Args:
+        Aucun (utilise request.form et request.files)
+    
+    Returns:
+        flask.Response: Réponse JSON avec les résultats du traitement
+    """
     upload_type = request.form.get('upload_type', 'single')
     reanalyze = request.form.get('reanalyze') == 'true'
     processed_files = []
@@ -1027,7 +1112,15 @@ def upload_ajax():
         
 
 def calculate_file_hash(file_path):
-    """Calcule le hash SHA-256 d'un fichier"""
+    """
+    Calcule le hash SHA-256 d'un fichier pour détecter les doublons.
+    
+    Args:
+        file_path (str): Chemin vers le fichier
+    
+    Returns:
+        str: Hash SHA-256 en hexadécimal
+    """
     hash_sha256 = hashlib.sha256()
     with open(file_path, "rb") as f:
         for chunk in iter(lambda: f.read(4096), b""):
@@ -1089,7 +1182,16 @@ def is_duplicate_file(file_path, filename):
 
 @app.route('/reanalyze/<int:image_id>', methods=['POST'])
 def reanalyze_image(image_id):
-    """Route pour ré-analyser une image spécifique depuis la galerie"""
+    """
+    Route pour ré-analyser une image spécifique depuis la galerie.
+    Recalcule toutes les caractéristiques et met à jour la base de données.
+    
+    Args:
+        image_id (int): L'ID de l'image à ré-analyser
+    
+    Returns:
+        flask.Response: Redirection vers la galerie avec message de statut
+    """
     try:
         conn = sqlite3.connect('db.sqlite')
         c = conn.cursor()
@@ -1134,7 +1236,16 @@ def reanalyze_image(image_id):
 
 
 def tr(fr, en):
-    """Simple translation helper based on session language."""
+    """
+    Fonction utilitaire de traduction simple basée sur la langue de session.
+    
+    Args:
+        fr (str): Texte en français
+        en (str): Texte en anglais
+    
+    Returns:
+        str: Texte dans la langue appropriée selon session['lang']
+    """
     lang = session.get('lang', 'fr')
     return fr if lang == 'fr' else en
 
