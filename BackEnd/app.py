@@ -372,25 +372,7 @@ def annotate(filename):
             c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (annotation, filename))
             conn.commit()
             conn.close()
-        else:
-            # Si l'annotation est "A determiner", on lance la labellisation automatique
-            classification, debug_info = classify_bin_automatic(
-                eval(request.form['avg_color']),  # Convertir la string en tuple
-                int(request.form['edge_count']),
-                float(request.form['contrast']),
-                int(request.form['width']),
-                int(request.form['height']),
-                request.form['hist_luminance'],
-                int(request.form.get('bin_edge_count', 0)),  # Nouveau paramètre
-                int(request.form.get('bin_area', 1)),  # Nouveau paramètre avec valeur par défaut pour éviter division par zéro
-                float(request.form.get('patch_diversity', 0.0))  # Nouveau paramètre pour la diversité des patchs
-            )
-            # Mettre à jour l'annotation dans la base de données
-            conn = sqlite3.connect('db.sqlite')
-            c = conn.cursor()
-            c.execute("UPDATE images SET annotation = ? WHERE filename = ?", (classification, filename))
-            conn.commit()
-            conn.close()
+        
         return redirect(url_for('upload_image'))
 
     conn = sqlite3.connect('db.sqlite')
